@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three.js GLB Loader - tongren</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      #viewport {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      #meridianSelect {
+        position: absolute;
+        top: 50px;
+        left: 20px;
+        z-index: 100;
+        padding: 10px 15px;
+        font-size: 16px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        min-width: 200px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      #meridianSelect:hover {
+        border-color: #666;
+      }
+
+      #meridianSelect:focus {
+        outline: none;
+        border-color: #0066cc;
+      }
+
+      #meridianLabel {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+      }
+
+      #acupointLabel {
+        position: absolute;
+        top: 100px;
+        left: 20px;
+        z-index: 100;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+      }
+
+      #acupointInput {
+        position: absolute;
+        top: 130px;
+        left: 20px;
+        z-index: 100;
+        width: 300px;
+        height: 100px;
+        padding: 10px;
+        font-size: 14px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        resize: vertical;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        font-family: inherit;
+      }
+
+      #acupointInput:focus {
+        outline: none;
+        border-color: #0066cc;
+      }
+
+      #acupointInput::placeholder {
+        color: #999;
+      }
+
+      .acupointButton {
+        position: absolute;
+        left: 20px;
+        z-index: 100;
+        padding: 8px 20px;
+        font-size: 14px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s;
+      }
+
+      .acupointButton:hover {
+        background-color: #f0f0f0;
+        border-color: #666;
+      }
+
+      .acupointButton:active {
+        background-color: #e0e0e0;
+      }
+
+      #acupointConfirmBtn {
+        top: 260px;
+      }
+
+      #acupointResetBtn {
+        top: 260px;
+        left: 100px;
+      }
+
+      #uploadButton {
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        z-index: 100;
+        padding: 10px 20px;
+        font-size: 14px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s;
+      }
+
+      #uploadButton:hover {
+        background-color: #f0f0f0;
+        border-color: #666;
+      }
+
+      #uploadButton:active {
+        background-color: #e0e0e0;
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      #lightingPanel {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 100;
+        background-color: #fff;
+        border: 2px solid #333;
+        border-radius: 5px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        min-width: 250px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      #lightingPanel h3 {
+        margin: 0 0 15px 0;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 8px;
+      }
+
+      .lighting-control-group {
+        margin-bottom: 15px;
+      }
+
+      .lighting-control-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+      }
+
+      .lighting-control-group input[type="range"] {
+        width: 100%;
+        margin-bottom: 5px;
+      }
+
+      .lighting-control-group input[type="number"] {
+        width: 80px;
+        padding: 4px;
+        font-size: 12px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+
+      .lighting-control-group input[type="checkbox"] {
+        margin-right: 5px;
+      }
+
+      .lighting-control-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .lighting-control-row label {
+        margin-bottom: 0;
+        min-width: 60px;
+      }
+
+      .lighting-toggle {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      #lightingToggleBtn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 101;
+        padding: 10px 20px;
+        font-size: 14px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s;
+      }
+
+      #lightingToggleBtn:hover {
+        background-color: #f0f0f0;
+        border-color: #666;
+      }
+
+      #lightingPanel.hidden {
+        display: none;
+      }
+
+    </style>
+  </head>
+  <body>
+    <canvas id="viewport"></canvas>
+    <label id="meridianLabel">奇经八脉:</label>
+    <select id="meridianSelect">
+      <option value="">无</option>
+      <option value="手太阴肺经">手太阴肺经</option>
+      <option value="手厥阴心包经">手厥阴心包经</option>
+      <option value="手少阴心经">手少阴心经</option>
+      <option value="手阳明大肠经">手阳明大肠经</option>
+      <option value="手少阳三焦经">手少阳三焦经</option>
+      <option value="手太阳小肠经">手太阳小肠经</option>
+      <option value="足阳明胃经">足阳明胃经</option>
+      <option value="足少阳胆经">足少阳胆经</option>
+      <option value="足太阳膀胱经">足太阳膀胱经</option>
+      <option value="足太阴脾经">足太阴脾经</option>
+      <option value="足厥阴肝经">足厥阴肝经</option>
+      <option value="足少阴肾经">足少阴肾经</option>
+      <option value="督脉">督脉</option>
+      <option value="任脉">任脉</option>
+      <option value="冲脉">冲脉</option>
+      <option value="带脉">带脉</option>
+      <option value="阴维脉">阴维脉</option>
+      <option value="阳维脉">阳维脉</option>
+      <option value="阴跷脉">阴跷脉</option>
+      <option value="阳跷脉">阳跷脉</option>
+    </select>
+    
+    <label id="acupointLabel">穴位名称:</label>
+    <textarea id="acupointInput" placeholder="请输入穴位名称，多个穴位用逗号、空格或换行分割，例如：合谷，足三里，太冲"></textarea>
+    <button id="acupointConfirmBtn" class="acupointButton">确定</button>
+    <button id="acupointResetBtn" class="acupointButton">重置</button>
+    
+    <button id="uploadButton">上传GLB模型</button>
+    <input type="file" id="fileInput" accept=".glb,.gltf" />
+    
+    <button id="lightingToggleBtn">光照控制</button>
+    <div id="lightingPanel" class="hidden">
+      <h3>光照设置</h3>
+      
+      <div class="lighting-control-group">
+        <label>环境光强度</label>
+        <input type="range" id="hemiIntensity" min="0" max="2" step="0.1" value="1.0" />
+        <div class="lighting-control-row">
+          <label>值:</label>
+          <input type="number" id="hemiIntensityValue" min="0" max="2" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <div class="lighting-control-group">
+        <label>方向光强度</label>
+        <input type="range" id="dirIntensity" min="0" max="3" step="0.1" value="1.5" />
+        <div class="lighting-control-row">
+          <label>值:</label>
+          <input type="number" id="dirIntensityValue" min="0" max="3" step="0.1" value="1.5" />
+        </div>
+        <div class="lighting-control-row">
+          <label>X:</label>
+          <input type="number" id="dirX" step="0.5" value="5" />
+          <label>Y:</label>
+          <input type="number" id="dirY" step="0.5" value="10" />
+          <label>Z:</label>
+          <input type="number" id="dirZ" step="0.5" value="7.5" />
+        </div>
+        <div class="lighting-toggle">
+          <input type="checkbox" id="dirShadow" checked />
+          <label for="dirShadow">启用阴影</label>
+        </div>
+      </div>
+
+      <div class="lighting-control-group">
+        <div class="lighting-toggle">
+          <input type="checkbox" id="pointLightEnabled" />
+          <label for="pointLightEnabled">点光源</label>
+        </div>
+        <div id="pointLightControls" style="display: none; margin-top: 10px;">
+          <label>点光源强度</label>
+          <input type="range" id="pointIntensity" min="0" max="5" step="0.1" value="1.0" />
+          <div class="lighting-control-row">
+            <label>值:</label>
+            <input type="number" id="pointIntensityValue" min="0" max="5" step="0.1" value="1.0" />
+          </div>
+          <div class="lighting-control-row">
+            <label>X:</label>
+            <input type="number" id="pointX" step="0.5" value="0" />
+            <label>Y:</label>
+            <input type="number" id="pointY" step="0.5" value="5" />
+            <label>Z:</label>
+            <input type="number" id="pointZ" step="0.5" value="0" />
+          </div>
+          <div class="lighting-control-row">
+            <label>颜色:</label>
+            <input type="color" id="pointColor" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+
+      <div class="lighting-control-group">
+        <div class="lighting-toggle">
+          <input type="checkbox" id="spotLightEnabled" />
+          <label for="spotLightEnabled">聚光灯</label>
+        </div>
+        <div id="spotLightControls" style="display: none; margin-top: 10px;">
+          <label>聚光灯强度</label>
+          <input type="range" id="spotIntensity" min="0" max="5" step="0.1" value="1.0" />
+          <div class="lighting-control-row">
+            <label>值:</label>
+            <input type="number" id="spotIntensityValue" min="0" max="5" step="0.1" value="1.0" />
+          </div>
+          <div class="lighting-control-row">
+            <label>位置 X:</label>
+            <input type="number" id="spotX" step="0.5" value="5" />
+            <label>Y:</label>
+            <input type="number" id="spotY" step="0.5" value="10" />
+            <label>Z:</label>
+            <input type="number" id="spotZ" step="0.5" value="5" />
+          </div>
+          <div class="lighting-control-row">
+            <label>角度:</label>
+            <input type="range" id="spotAngle" min="0" max="90" step="1" value="30" />
+            <input type="number" id="spotAngleValue" min="0" max="90" step="1" value="30" />
+          </div>
+          <div class="lighting-control-row">
+            <label>颜色:</label>
+            <input type="color" id="spotColor" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+      const canvas = document.querySelector("#viewport");
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.shadowMap.enabled = true;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xcccccc);
+
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(1.5, 1.5, 3);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 1, 0);
+
+      // 添加环境光
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+      hemiLight.position.set(0, 1, 0);
+      scene.add(hemiLight);
+
+      // 添加方向光
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+      dirLight.position.set(5, 10, 7.5);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 0.5;
+      dirLight.shadow.camera.far = 50;
+      scene.add(dirLight);
+
+      // 点光源（默认关闭）
+      const pointLight = new THREE.PointLight(0xffffff, 1.0, 100);
+      pointLight.position.set(0, 5, 0);
+      pointLight.visible = false;
+      scene.add(pointLight);
+
+      // 聚光灯（默认关闭）
+      const spotLight = new THREE.SpotLight(0xffffff, 1.0);
+      spotLight.position.set(5, 10, 5);
+      spotLight.angle = Math.PI / 6; // 30度
+      spotLight.penumbra = 0.1;
+      spotLight.decay = 2;
+      spotLight.distance = 200;
+      spotLight.target.position.set(0, 0, 0); // 指向模型中心
+      spotLight.visible = false;
+      scene.add(spotLight);
+      scene.add(spotLight.target); // 需要将target添加到场景中
+
+      // 环境贴图相关变量
+      let envMap = null; // 存储生成的环境贴图
+      let cubeCamera = null; // CubeCamera 实例
+
+      // 从场景光照生成环境贴图（使用 CubeCamera）
+      function generateEnvironmentMapFromScene() {
+        // 清理旧的环境贴图
+        if (envMap) {
+          envMap.dispose();
+          envMap = null;
+        }
+        if (cubeCamera) {
+          cubeCamera.renderTarget.dispose();
+          scene.remove(cubeCamera);
+          cubeCamera = null;
+        }
+        
+        // 使用 CubeCamera 生成环境贴图
+        const size = 512; // 环境贴图分辨率
+        const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(size);
+        cubeRenderTarget.texture.type = THREE.HalfFloatType;
+        cubeRenderTarget.texture.colorSpace = THREE.SRGBColorSpace;
+        
+        cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+        
+        // 临时隐藏模型，只渲染光照和背景
+        const originalVisible = {};
+        if (modelRef) {
+          modelRef.traverse((child) => {
+            if (child.isMesh) {
+              originalVisible[child.uuid] = child.visible;
+              child.visible = false;
+            }
+          });
+        }
+        
+        // 从场景中心捕获6个方向
+        cubeCamera.position.set(0, 0, 0);
+        cubeCamera.update(renderer, scene);
+        
+        // 恢复模型可见性
+        if (modelRef) {
+          modelRef.traverse((child) => {
+            if (child.isMesh && originalVisible.hasOwnProperty(child.uuid)) {
+              child.visible = originalVisible[child.uuid];
+            }
+          });
+        }
+        
+        envMap = cubeRenderTarget.texture;
+        
+        // 将环境贴图应用到场景
+        scene.environment = envMap;
+        
+        // 将环境贴图应用到所有模型的材质
+        if (modelRef) {
+          modelRef.traverse((child) => {
+            if (child.isMesh && child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((mat) => {
+                  if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                    mat.envMap = envMap;
+                    mat.envMapIntensity = 1.0;
+                    mat.needsUpdate = true;
+                  }
+                });
+              } else {
+                if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+                  child.material.envMap = envMap;
+                  child.material.envMapIntensity = 1.0;
+                  child.material.needsUpdate = true;
+                }
+              }
+            }
+          });
+        }
+        
+        return envMap;
+      }
+
+      // 存储模型引用和当前高亮的mesh
+      let modelRef = null;
+      let highlightedMeshes = [];
+      let highlightedLines = []; // 存储重新绘制的粗线
+      let currentMeridianName = null; // 当前选中的经络名称
+      let flowEffects = []; // 存储流动效果信息
+      let highlightedAcupointMeshes = []; // 存储高亮的穴位mesh
+
+      // 移除旧模型
+      function removeOldModel() {
+        if (modelRef) {
+          // 清除所有高亮
+          restoreHighlightedMeshes();
+          restoreHighlightedAcupointMeshes();
+          
+          // 从场景中移除旧模型
+          scene.remove(modelRef);
+          
+          // 清理模型资源
+          modelRef.traverse((child) => {
+            if (child.isMesh) {
+              if (child.geometry) child.geometry.dispose();
+              if (child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach((mat) => mat.dispose());
+                } else {
+                  child.material.dispose();
+                }
+              }
+            }
+          });
+          
+          modelRef = null;
+        }
+      }
+
+      // 加载模型的通用函数
+      function loadModel(urlOrFile) {
+        const loader = new GLTFLoader();
+        
+        const onLoad = (gltf) => {
+          const model = gltf.scene;
+          modelRef = model;
+          
+          // 设置阴影和环境贴图
+          model.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              
+              // 如果已有环境贴图，应用到材质
+              if (envMap && child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach((mat) => {
+                    if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                      mat.envMap = envMap;
+                      mat.envMapIntensity = 1.0;
+                      mat.needsUpdate = true;
+                    }
+                  });
+                } else {
+                  if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+                    child.material.envMap = envMap;
+                    child.material.envMapIntensity = 1.0;
+                    child.material.needsUpdate = true;
+                  }
+                }
+              }
+            }
+          });
+
+          // 计算模型边界并居中
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+
+          // 将模型居中
+          model.position.sub(center);
+          scene.add(model);
+
+          // 计算相机距离
+          const fov = camera.fov * (Math.PI / 180);
+          // 根据模型高度计算距离
+          const distance = Math.abs(size.y / 2 / Math.tan(fov / 2));
+          
+          // 设置相机位置
+          const angle = Math.PI / 6;
+          camera.position.set(
+            distance * Math.sin(angle),
+            distance * Math.cos(angle) * 0.3,
+            distance * Math.cos(angle)
+          );
+          camera.lookAt(0, 0, 0);
+          
+          // 更新控制器目标为模型中心
+          controls.target.set(0, 0, 0);
+          controls.update();
+
+          // 调整相机和控制器以适应模型
+          const maxDim = Math.max(size.x, size.y, size.z);
+          controls.maxDistance = maxDim * 3;
+          controls.minDistance = maxDim * 0.01; 
+          // 设置更小的 near 值，允许相机更靠近模型而不被裁剪
+          camera.near = Math.max(maxDim / 1000, 0.001);
+          camera.far = maxDim * 20;
+          camera.updateProjectionMatrix();
+          
+          // 打印所有mesh
+          const allMeshes = [];
+          model.traverse((child) => {
+            if (child.isMesh) {
+              allMeshes.push({
+                name: child.name || "未命名",
+                type: child.type,
+                uuid: child.uuid,
+                visible: child.visible,
+                position: {
+                  x: child.position.x.toFixed(4),
+                  y: child.position.y.toFixed(4),
+                  z: child.position.z.toFixed(4)
+                },
+                material: child.material ? {
+                  type: child.material.type,
+                  color: child.material.color ? child.material.color.getHexString() : null
+                } : null,
+                geometry: child.geometry ? {
+                  type: child.geometry.type,
+                  vertices: child.geometry.attributes.position ? child.geometry.attributes.position.count : 0
+                } : null
+              });
+            }
+          });
+          console.log(allMeshes);
+          
+          // 自动生成环境贴图
+          setTimeout(() => {
+            try {
+              generateEnvironmentMapFromScene();
+              console.log("环境贴图已自动生成");
+            } catch (error) {
+              console.warn("自动生成环境贴图失败:", error);
+            }
+          }, 100);
+        };
+
+        const onProgress = (progress) => {
+          const percent = (progress.loaded / progress.total) * 100;
+          console.log(`加载进度: ${percent.toFixed(2)}%`);
+        };
+
+        const onError = (error) => {
+          console.error("加载模型失败:", error);
+          alert("加载模型失败，请检查文件格式是否正确。");
+        };
+
+        // 如果是File对象，使用URL.createObjectURL转换为URL
+        if (urlOrFile instanceof File) {
+          const objectURL = URL.createObjectURL(urlOrFile);
+          loader.load(
+            objectURL,
+            (gltf) => {
+              onLoad(gltf);
+              // 释放对象URL
+              URL.revokeObjectURL(objectURL);
+            },
+            onProgress,
+            (error) => {
+              onError(error);
+              URL.revokeObjectURL(objectURL);
+            }
+          );
+        } else {
+          // 如果是URL字符串，直接加载
+          loader.load(urlOrFile, onLoad, onProgress, onError);
+        }
+      }
+
+      // 初始加载模型
+      loadModel("./tongren12.glb");
+
+      // 窗口大小调整
+      const resize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      };
+
+      window.addEventListener("resize", resize);
+
+      // 动画循环
+      const animate = () => {
+        requestAnimationFrame(animate);
+        controls.update();
+        
+        // 更新流动效果 - 从起点向终点流动
+        flowEffects.forEach((effect) => {
+          // 负值表示从起点向终点流动
+          effect.texture.offset.x -= 0.01 * effect.speed;
+        });
+        
+        renderer.render(scene, camera);
+      };
+
+      animate();
+
+      // 恢复所有高亮的mesh
+      function restoreHighlightedMeshes() {
+        highlightedMeshes.forEach((item) => {
+          if (item.mesh && item.originalMaterial) {
+            item.mesh.material = item.originalMaterial;
+            item.mesh.visible = item.originalVisible !== undefined ? item.originalVisible : true;
+          }
+        });
+        highlightedMeshes = [];
+        
+        // 删除所有重新绘制的粗线
+        highlightedLines.forEach((line) => {
+          if (line && line.parent) {
+            line.parent.remove(line);
+          }
+        });
+        highlightedLines = [];
+        
+        // 清除流动效果
+        flowEffects = [];
+      }
+
+      // 恢复所有高亮的穴位mesh
+      function restoreHighlightedAcupointMeshes() {
+        highlightedAcupointMeshes.forEach((item) => {
+          if (item.mesh && item.originalMaterial) {
+            item.mesh.material = item.originalMaterial;
+            item.mesh.visible = item.originalVisible !== undefined ? item.originalVisible : true;
+          }
+        });
+        highlightedAcupointMeshes = [];
+      }
+
+      // 高亮穴位mesh（使用橘色）
+      function highlightAcupointMesh(mesh) {
+        if (!mesh || !mesh.isMesh) return;
+
+        // 保存原始材质和可见性
+        if (!mesh.userData.originalAcupointMaterial) {
+          mesh.userData.originalAcupointMaterial = mesh.material;
+        }
+        if (mesh.userData.originalAcupointVisible === undefined) {
+          mesh.userData.originalAcupointVisible = mesh.visible;
+        }
+
+        // 创建高亮材质 - 使用橘色发光效果
+        const highlightMaterial = new THREE.MeshStandardMaterial({
+          color: 0xFF8C00, // 橘色
+          emissive: 0xFF8C00, // 发光颜色（橘色）
+          emissiveIntensity: 1.5, // 增强发光强度
+          metalness: 0.0,
+          roughness: 0.2,
+          side: THREE.DoubleSide // 双面渲染
+        });
+
+        // 如果mesh有顶点色，保留顶点色但增强发光
+        if (mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.color) {
+          highlightMaterial.vertexColors = true;
+          highlightMaterial.emissiveIntensity = 2.0;
+          highlightMaterial.emissive = new THREE.Color(0xFF8C00);
+        }
+
+        // 应用高亮材质
+        mesh.material = highlightMaterial;
+        mesh.visible = true;
+
+        // 保存到高亮列表
+        highlightedAcupointMeshes.push({
+          mesh: mesh,
+          originalMaterial: mesh.userData.originalAcupointMaterial,
+          originalVisible: mesh.userData.originalAcupointVisible
+        });
+      }
+
+      // 根据穴位名称数组查找并高亮mesh
+      function highlightAcupoints(acupointNames) {
+        if (!modelRef || !acupointNames || acupointNames.length === 0) {
+          restoreHighlightedAcupointMeshes();
+          return;
+        }
+
+        // 先恢复之前高亮的穴位mesh
+        restoreHighlightedAcupointMeshes();
+
+        // 查找名称包含穴位名称的mesh
+        // 同一个穴位可能有多个mesh（如：筑宾、筑宾001、_筑宾、_筑宾001），需要匹配所有
+        const matchingMeshes = [];
+        const processedMeshes = new Set(); // 记录已处理的mesh，避免重复添加
+        
+        modelRef.traverse((child) => {
+          if (child.isMesh && child.name && !child.name.startsWith("Line")) {
+            // 避免同一个mesh被重复添加
+            if (processedMeshes.has(child)) return;
+            
+            // 优先使用精确匹配：支持多种命名方式
+            for (const acupointName of acupointNames) {
+              if (child.name.startsWith(acupointName) || child.name.startsWith("_" + acupointName)) {
+                matchingMeshes.push({
+                  mesh: child,
+                  acupointName: acupointName
+                });
+                processedMeshes.add(child);
+                break;
+              }
+            }
+          }
+        });
+        
+        // 如果精确匹配没找到所有穴位，尝试包含匹配
+        const foundAcupointNames = new Set(matchingMeshes.map(m => m.acupointName));
+        const unfoundAcupoints = acupointNames.filter(name => !foundAcupointNames.has(name));
+        if (unfoundAcupoints.length > 0) {
+          modelRef.traverse((child) => {
+            if (child.isMesh && child.name && !child.name.startsWith("Line")) {
+              if (processedMeshes.has(child)) return;
+              
+              for (const acupointName of unfoundAcupoints) {
+                // 检查mesh名称是否包含穴位名称
+                if (child.name.includes(acupointName)) {
+                  matchingMeshes.push({
+                    mesh: child,
+                    acupointName: acupointName
+                  });
+                  processedMeshes.add(child);
+                  break; // 找到一个匹配就跳出穴位名称循环，继续下一个mesh
+                }
+              }
+            }
+          });
+        }
+
+        matchingMeshes.forEach((item) => {
+          highlightAcupointMesh(item.mesh);
+        });
+      }
+
+      // 从线对象提取顶点
+      function extractPointsFromLine(lineObject) {
+        if (!lineObject.geometry) return [];
+        
+        const geometry = lineObject.geometry;
+        const positions = geometry.attributes.position;
+        if (!positions || positions.count < 2) return [];
+        
+        const points = [];
+        
+        // 应用世界变换矩阵
+        lineObject.updateMatrixWorld(true);
+        
+        // 提取顶点
+        for (let i = 0; i < positions.count; i++) {
+          const point = new THREE.Vector3();
+          point.fromBufferAttribute(positions, i);
+          point.applyMatrix4(lineObject.matrixWorld);
+          points.push(point);
+        }
+        
+        return points;
+      }
+
+      // 创建橘色和白色相间的条纹纹理
+      function createOrangeWhiteStripedTexture() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const context = canvas.getContext("2d");
+
+        const stripeWidth = 64; // 条纹宽度
+        for (let i = 0; i <= canvas.width; i += stripeWidth) {
+          // 计算当前条纹的颜色：每两个stripeWidth为一个周期（橘色+白色）
+          const cycleIndex = Math.floor(i / (stripeWidth * 2));
+          const positionInCycle = (i % (stripeWidth * 2)) / stripeWidth;
+          const isOrange = positionInCycle < 1;
+          
+          // 橘色 #FF8C00 或 #FFA500
+          context.fillStyle = isOrange ? "#FF8C00" : "#ffffff";
+          // 确保最后一条条纹填满到画布边缘
+          const actualWidth = Math.min(stripeWidth, canvas.width - i);
+          context.fillRect(i, 0, actualWidth, canvas.height);
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        // 确保纹理不进行模糊处理，保持条纹清晰
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+      }
+
+      // 创建粗线（使用TubeGeometry和CatmullRomCurve3）
+      function createThickLine(points, baseRadius = 0.01) {
+        if (points.length < 2) return null;
+        const radius = baseRadius * 0.2;
+        
+        // 使用CatmullRomCurve3创建平滑曲线
+        // 如果只有2个点，CatmullRomCurve3会自动创建直线
+        let curve;
+        if (points.length === 2) {
+          // 对于2个点，添加一个中间点来创建平滑曲线
+          const midPoint = new THREE.Vector3().addVectors(points[0], points[1]).multiplyScalar(0.5);
+          const curvePoints = [points[0], midPoint, points[1]];
+          curve = new THREE.CatmullRomCurve3(curvePoints, false, "catmullrom", 0.5);
+        } else {
+          curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.5);
+        }
+        
+        // 计算分段数，确保曲线足够平滑
+        const segments = Math.max(64, points.length * 12);
+        const tubeGeometry = new THREE.TubeGeometry(curve, segments, radius, 16, false);
+        
+        // 创建橘色和白色相间的条纹纹理
+        const texture = createOrangeWhiteStripedTexture();
+        // 设置纹理重复，使条纹沿曲线方向重复
+        texture.repeat.set(15, 1);
+        
+        // 创建使用纹理的材质
+        const flowMaterial = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          side: THREE.DoubleSide
+        });
+        
+        const tube = new THREE.Mesh(tubeGeometry, flowMaterial);
+        
+        // 存储纹理和速度信息，用于动画
+        flowEffects.push({
+          texture: texture,
+          mesh: tube,
+          speed: 1.0 // 流动速度
+        });
+        
+        return tube;
+      }
+      // 从mesh提取顶点（用于创建曲线）
+      function extractPointsFromMesh(mesh) {
+        if (!mesh || !mesh.geometry) return [];
+        
+        const geometry = mesh.geometry;
+        if (!geometry.attributes || !geometry.attributes.position) return [];
+        
+        mesh.updateMatrixWorld(true);
+        const points = [];
+        const positions = geometry.attributes.position;
+        
+        // 如果有索引，按索引顺序提取
+        if (geometry.index) {
+          const index = geometry.index;
+          const seen = new Set();
+          for (let i = 0; i < index.count; i++) {
+            const vertexIndex = index.getX(i);
+            const point = new THREE.Vector3();
+            point.fromBufferAttribute(positions, vertexIndex);
+            point.applyMatrix4(mesh.matrixWorld);
+            
+            // 去重（允许小的误差）
+            const key = `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              points.push(point);
+            }
+          }
+        } else {
+          // 没有索引，直接提取所有顶点
+          const seen = new Set();
+          for (let i = 0; i < positions.count; i++) {
+            const point = new THREE.Vector3();
+            point.fromBufferAttribute(positions, i);
+            point.applyMatrix4(mesh.matrixWorld);
+            
+            // 去重
+            const key = `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              points.push(point);
+            }
+          }
+        }
+        
+        return points;
+      }
+
+      // 高亮mesh或线 - 每个匹配的对象都创建一条独立的曲线
+      function highlightMeshOrLine(obj) {
+        if (!obj) return;
+        
+        // 计算合适的线粗细
+        const box = new THREE.Box3().setFromObject(modelRef);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const lineRadius = maxDim * 0.003;
+        
+        let points = [];
+        
+        // 检查是否是线对象
+        if (obj.isLine || obj.isLineSegments) {
+          // 从线对象提取顶点
+          points = extractPointsFromLine(obj);
+        } else if (obj.isMesh) {
+          // 从mesh提取顶点
+          points = extractPointsFromMesh(obj);
+        }
+        
+        // 如果提取到足够的点，创建一条曲线
+        if (points.length >= 2) {
+          const thickLine = createThickLine(points, lineRadius);
+          if (thickLine) {
+            scene.add(thickLine);
+            highlightedLines.push(thickLine);
+          }
+        } else if (obj.isMesh && points.length < 2) {
+          // 如果mesh顶点数不足或提取失败，使用原来的高亮方式
+          highlightMesh(obj);
+        }
+      }
+      
+      // 高亮mesh（保留用于普通mesh）
+      function highlightMesh(mesh) {
+        if (!mesh || !mesh.isMesh) return;
+
+        // 保存原始材质和可见性
+        if (!mesh.userData.originalMaterial) {
+          mesh.userData.originalMaterial = mesh.material;
+        }
+        if (mesh.userData.originalVisible === undefined) {
+          mesh.userData.originalVisible = mesh.visible;
+        }
+
+        // 创建高亮材质
+        const highlightMaterial = new THREE.MeshStandardMaterial({
+          color: 0x00ff00,
+          emissive: 0x00ff00, // 发光颜色
+          emissiveIntensity: 1.5, // 增强发光强度
+          metalness: 0.0,
+          roughness: 0.2,
+          side: THREE.DoubleSide // 双面渲染
+        });
+
+        // 如果mesh有顶点色，保留顶点色但增强发光
+        if (mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.color) {
+          highlightMaterial.vertexColors = true;
+          highlightMaterial.emissiveIntensity = 2.0;
+          highlightMaterial.emissive = new THREE.Color(0x00ff00);
+        }
+
+        // 应用高亮材质
+        mesh.material = highlightMaterial;
+        mesh.visible = true;
+
+        // 保存到高亮列表
+        highlightedMeshes.push({
+          mesh: mesh,
+          originalMaterial: mesh.userData.originalMaterial,
+          originalVisible: mesh.userData.originalVisible
+        });
+      }
+
+      // 根据经络名称查找并高亮mesh
+      function highlightMeridian(meridianName) {
+        if (!modelRef || !meridianName) {
+          restoreHighlightedMeshes();
+          return;
+        }
+
+        // 先恢复之前高亮的mesh和穴位mesh
+        restoreHighlightedMeshes();
+        restoreHighlightedAcupointMeshes();
+
+        // 查找名称包含该经络的对象（只查找以"Line"开头的mesh）
+        const matchingObjects = [];
+        const acupointNames = new Set();
+        
+        modelRef.traverse((child) => {
+          if (child.name && child.name.includes(meridianName)) {
+            // 只查找以"Line"开头的mesh
+            if (child.isMesh && child.name.startsWith("Line")) {
+              matchingObjects.push(child);
+              
+              // 解析线mesh名称，提取起点和终点穴位
+              // 格式：Line手太阴肺经_中府_少商
+              const nameWithoutLine = child.name.substring(4); // 去掉"Line"前缀
+              const parts = nameWithoutLine.split("_");
+              if (parts.length >= 3) {
+                // parts[0] 是经络名称，parts[1] 是起点穴位，parts[2] 是终点穴位
+                const startAcupoint = parts[1].trim();
+                const endAcupoint = parts[2].trim();
+                if (startAcupoint) acupointNames.add(startAcupoint);
+                if (endAcupoint) acupointNames.add(endAcupoint);
+              }
+            } else if (child.isLine || child.isLineSegments) {
+              matchingObjects.push(child);
+            }
+          }
+        });
+        
+        // 创建流动线效果
+        matchingObjects.forEach((obj) => {
+          highlightMeshOrLine(obj);
+        });
+        
+        // 高亮起点和终点穴位
+        if (acupointNames.size > 0) {
+          const acupointArray = Array.from(acupointNames);
+          console.log('起点和终点穴位:', acupointArray);
+          highlightAcupoints(acupointArray);
+        }
+      }
+
+      // 下拉框事件监听
+      const meridianSelect = document.getElementById("meridianSelect");
+      meridianSelect.addEventListener("change", (event) => {
+        const selectedValue = event.target.value;
+        
+        currentMeridianName = selectedValue || null;
+        
+        if (selectedValue) {
+          highlightMeridian(selectedValue);
+        } else {
+          // 如果选择"无"，恢复所有高亮（包括穴位）
+          restoreHighlightedMeshes();
+          restoreHighlightedAcupointMeshes();
+        }
+      });
+
+      // 穴位输入框相关事件监听
+      const acupointInput = document.getElementById("acupointInput");
+      const acupointConfirmBtn = document.getElementById("acupointConfirmBtn");
+      const acupointResetBtn = document.getElementById("acupointResetBtn");
+      
+      // 确定按钮点击事件
+      acupointConfirmBtn.addEventListener("click", () => {
+        const inputValue = acupointInput.value.trim();
+        
+        if (inputValue) {
+          
+          // 使用正则表达式分割
+          const acupointArray = inputValue
+            .split(/[,，\s\n\r]+/)  // 匹配逗号（中英文）、空格、换行符
+            .map(item => item.trim())  // 去除前后空格
+            .filter(item => item.length > 0);  // 过滤空字符串
+          
+          // 根据穴位数组查找并高亮mesh
+          highlightAcupoints(acupointArray);
+        } else {
+          // 如果输入框为空，恢复所有高亮的穴位mesh
+          restoreHighlightedAcupointMeshes();
+        }
+      });
+      
+      // 重置按钮点击事件
+      acupointResetBtn.addEventListener("click", () => {
+        acupointInput.value = "";
+        // 恢复所有高亮的穴位mesh
+        restoreHighlightedAcupointMeshes();
+      });
+
+      // 文件上传相关事件监听
+      const uploadButton = document.getElementById("uploadButton");
+      const fileInput = document.getElementById("fileInput");
+      
+      // 点击上传按钮时触发文件选择
+      uploadButton.addEventListener("click", () => {
+        fileInput.click();
+      });
+      
+      // 文件选择变化时加载新模型
+      fileInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          // 检查文件类型
+          if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
+            alert("请选择GLB或GLTF格式的文件！");
+            fileInput.value = "";
+            return;
+          }
+          
+          // 移除旧模型
+          removeOldModel();
+          
+          // 加载新模型
+          loadModel(file);
+          
+          // 重置下拉框和输入框
+          meridianSelect.value = "";
+          acupointInput.value = "";
+          currentMeridianName = null;
+        }
+      });
+
+      // 光照控制相关事件监听
+      const lightingToggleBtn = document.getElementById("lightingToggleBtn");
+      const lightingPanel = document.getElementById("lightingPanel");
+      
+      // 切换光照面板显示/隐藏
+      lightingToggleBtn.addEventListener("click", () => {
+        lightingPanel.classList.toggle("hidden");
+        if (lightingPanel.classList.contains("hidden")) {
+          lightingToggleBtn.textContent = "光照控制";
+        } else {
+          lightingToggleBtn.textContent = "关闭";
+        }
+      });
+
+      // 环境光强度控制
+      const hemiIntensity = document.getElementById("hemiIntensity");
+      const hemiIntensityValue = document.getElementById("hemiIntensityValue");
+      
+      hemiIntensity.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        hemiLight.intensity = value;
+        hemiIntensityValue.value = value.toFixed(1);
+      });
+      
+      hemiIntensityValue.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        hemiLight.intensity = value;
+        hemiIntensity.value = value;
+      });
+
+      // 方向光强度控制
+      const dirIntensity = document.getElementById("dirIntensity");
+      const dirIntensityValue = document.getElementById("dirIntensityValue");
+      
+      dirIntensity.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        dirLight.intensity = value;
+        dirIntensityValue.value = value.toFixed(1);
+      });
+      
+      dirIntensityValue.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        dirLight.intensity = value;
+        dirIntensity.value = value;
+      });
+
+      // 方向光位置控制
+      const dirX = document.getElementById("dirX");
+      const dirY = document.getElementById("dirY");
+      const dirZ = document.getElementById("dirZ");
+      
+      [dirX, dirY, dirZ].forEach((input, index) => {
+        input.addEventListener("input", (e) => {
+          const value = parseFloat(e.target.value);
+          if (index === 0) dirLight.position.x = value;
+          else if (index === 1) dirLight.position.y = value;
+          else if (index === 2) dirLight.position.z = value;
+        });
+      });
+
+      // 方向光阴影控制
+      const dirShadow = document.getElementById("dirShadow");
+      dirShadow.addEventListener("change", (e) => {
+        dirLight.castShadow = e.target.checked;
+      });
+
+      // 点光源控制
+      const pointLightEnabled = document.getElementById("pointLightEnabled");
+      const pointLightControls = document.getElementById("pointLightControls");
+      
+      pointLightEnabled.addEventListener("change", (e) => {
+        pointLight.visible = e.target.checked;
+        pointLightControls.style.display = e.target.checked ? "block" : "none";
+      });
+
+      const pointIntensity = document.getElementById("pointIntensity");
+      const pointIntensityValue = document.getElementById("pointIntensityValue");
+      
+      pointIntensity.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        pointLight.intensity = value;
+        pointIntensityValue.value = value.toFixed(1);
+      });
+      
+      pointIntensityValue.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        pointLight.intensity = value;
+        pointIntensity.value = value;
+      });
+
+      const pointX = document.getElementById("pointX");
+      const pointY = document.getElementById("pointY");
+      const pointZ = document.getElementById("pointZ");
+      
+      [pointX, pointY, pointZ].forEach((input, index) => {
+        input.addEventListener("input", (e) => {
+          const value = parseFloat(e.target.value);
+          if (index === 0) pointLight.position.x = value;
+          else if (index === 1) pointLight.position.y = value;
+          else if (index === 2) pointLight.position.z = value;
+        });
+      });
+
+      const pointColor = document.getElementById("pointColor");
+      pointColor.addEventListener("input", (e) => {
+        pointLight.color.setStyle(e.target.value);
+      });
+
+      // 聚光灯控制
+      const spotLightEnabled = document.getElementById("spotLightEnabled");
+      const spotLightControls = document.getElementById("spotLightControls");
+      
+      spotLightEnabled.addEventListener("change", (e) => {
+        spotLight.visible = e.target.checked;
+        spotLightControls.style.display = e.target.checked ? "block" : "none";
+      });
+
+      const spotIntensity = document.getElementById("spotIntensity");
+      const spotIntensityValue = document.getElementById("spotIntensityValue");
+      
+      spotIntensity.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        spotLight.intensity = value;
+        spotIntensityValue.value = value.toFixed(1);
+      });
+      
+      spotIntensityValue.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        spotLight.intensity = value;
+        spotIntensity.value = value;
+      });
+
+      const spotX = document.getElementById("spotX");
+      const spotY = document.getElementById("spotY");
+      const spotZ = document.getElementById("spotZ");
+      
+      [spotX, spotY, spotZ].forEach((input, index) => {
+        input.addEventListener("input", (e) => {
+          const value = parseFloat(e.target.value);
+          if (index === 0) spotLight.position.x = value;
+          else if (index === 1) spotLight.position.y = value;
+          else if (index === 2) spotLight.position.z = value;
+          // 更新聚光灯指向模型中心
+          spotLight.target.position.set(0, 0, 0);
+        });
+      });
+
+      const spotAngle = document.getElementById("spotAngle");
+      const spotAngleValue = document.getElementById("spotAngleValue");
+      
+      spotAngle.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        spotLight.angle = (value * Math.PI) / 180;
+        spotAngleValue.value = value;
+      });
+      
+      spotAngleValue.addEventListener("input", (e) => {
+        const value = parseFloat(e.target.value);
+        spotLight.angle = (value * Math.PI) / 180;
+        spotAngle.value = value;
+      });
+
+      const spotColor = document.getElementById("spotColor");
+      spotColor.addEventListener("input", (e) => {
+        spotLight.color.setStyle(e.target.value);
+      });
+
+      // 当光照参数改变时，自动重新生成环境贴图
+      const lightingInputs = [
+        hemiIntensity, dirIntensity, dirX, dirY, dirZ,
+        pointIntensity, pointX, pointY, pointZ, pointColor,
+        spotIntensity, spotX, spotY, spotZ, spotAngle, spotColor
+      ];
+      
+      // 防抖函数，避免频繁重新生成
+      let envMapRegenerateTimer = null;
+      function regenerateEnvMapDebounced() {
+        if (envMapRegenerateTimer) {
+          clearTimeout(envMapRegenerateTimer);
+        }
+        envMapRegenerateTimer = setTimeout(() => {
+          if (modelRef && envMap) {
+            try {
+              generateEnvironmentMapFromScene();
+              console.log("环境贴图已根据新的光照参数重新生成");
+            } catch (error) {
+              console.warn("重新生成环境贴图失败:", error);
+            }
+          }
+        }, 500); // 延迟500ms后重新生成
+      }
+      
+      lightingInputs.forEach(input => {
+        if (input) {
+          input.addEventListener("input", () => {
+            regenerateEnvMapDebounced();
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
+
