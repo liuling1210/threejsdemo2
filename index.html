@@ -391,11 +391,17 @@
         </div>
       </div>
       <div class="pbr-group">
-        <label>环境贴图强度 (envMapIntensity)</label>
-        <input type="range" id="pbrEnvMapIntensity" min="0" max="2" step="0.05" value="1" />
-        <div class="pbr-row">
-          <label>值:</label>
-          <input type="number" id="pbrEnvMapIntensityValue" min="0" max="2" step="0.05" value="1" />
+        <label class="pbr-toggle">
+          <input type="checkbox" id="imageEnvMapEnabled" checked />
+          启用环境贴图
+        </label>
+        <div id="imageEnvMapParams" style="margin-top:8px;">
+          <label>环境贴图强度</label>
+          <input type="range" id="pbrEnvMapIntensity" min="0" max="2" step="0.05" value="1" />
+          <div class="pbr-row">
+            <label>值:</label>
+            <input type="number" id="pbrEnvMapIntensityValue" min="0" max="2" step="0.05" value="1" />
+          </div>
         </div>
       </div>
       <div class="pbr-group" style="margin-top:12px;">
@@ -522,6 +528,120 @@
       // 环境贴图相关变量
       let envMap = null; // 存储生成的环境贴图
       let cubeCamera = null; // CubeCamera 实例
+      let useImageEnvMap = false; // 是否使用图片环境贴图（为 true 时不使用 CubeCamera 覆盖）
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+
+      // 透明材质反射补偿：Three.js 会将最终颜色（含反射）乘上 opacity，导致反射被压暗。此处对透明材质提高 envMapIntensity，使反射在乘 opacity 后仍接近设定强度。
+      function getEnvMapIntensityForMaterial(mat, baseIntensity) {
+        const opacity = typeof mat.opacity === "number" ? mat.opacity : 1;
+        const isTransparent = mat.transparent === true || (opacity < 1);
+        if (!isTransparent) return baseIntensity;
+        return baseIntensity / Math.max(0.01, opacity);
+      }
+
+      // 加载 huanjingtietu.png 作为场景环境贴图（全景图转立方体贴图）
+      function loadImageEnvironmentMap() {
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          "huanjingtietu.png",
+          (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const cubeEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
+            texture.dispose();
+            // 清理旧的环境贴图
+            if (envMap) {
+              envMap.dispose();
+              envMap = null;
+            }
+            if (cubeCamera) {
+              cubeCamera.renderTarget.dispose();
+              scene.remove(cubeCamera);
+              cubeCamera = null;
+            }
+            envMap = cubeEnvMap;
+            scene.environment = envMap;
+            useImageEnvMap = true;
+            const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
+            const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
+            // 应用到已加载的模型
+            if (modelRef) {
+              modelRef.traverse((child) => {
+                if (child.isMesh && child.material) {
+                  if (Array.isArray(child.material)) {
+                    child.material.forEach((mat) => {
+                      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                        mat.envMap = envMap;
+                        mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envIntensity);
+                        mat.needsUpdate = true;
+                      }
+                    });
+                  } else {
+                    if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+                      child.material.envMap = envMap;
+                      child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, envIntensity);
+                      child.material.needsUpdate = true;
+                    }
+                  }
+                }
+              });
+            }
+            if (typeof syncPbrFromPanel === "function") syncPbrFromPanel();
+            console.log("环境贴图 huanjingtietu.png 已加载并应用");
+          },
+          undefined,
+          (err) => console.warn("加载环境贴图 huanjingtietu.png 失败:", err)
+        );
+      }
+
+      // 关闭图片环境贴图（释放贴图、清空场景与材质的 envMap）
+      function clearImageEnvironmentMap() {
+        useImageEnvMap = false;
+        if (envMap) {
+          envMap.dispose();
+          envMap = null;
+        }
+        scene.environment = null;
+        if (modelRef) {
+          modelRef.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((mat) => {
+                if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                  mat.envMap = null;
+                  mat.envMapIntensity = 0;
+                  mat.needsUpdate = true;
+                }
+              });
+            }
+          });
+        }
+        const paramsEl = document.getElementById("imageEnvMapParams");
+        if (paramsEl) paramsEl.style.display = "none";
+      }
+
+      // 根据开关决定是否加载图片环境贴图
+      const imageEnvMapCheckbox = document.getElementById("imageEnvMapEnabled");
+      const imageEnvMapParamsEl = document.getElementById("imageEnvMapParams");
+      if (imageEnvMapCheckbox && imageEnvMapParamsEl) {
+        if (imageEnvMapCheckbox.checked) {
+          loadImageEnvironmentMap();
+          imageEnvMapParamsEl.style.display = "";
+        } else {
+          clearImageEnvironmentMap();
+        }
+        imageEnvMapCheckbox.addEventListener("change", () => {
+          if (imageEnvMapCheckbox.checked) {
+            loadImageEnvironmentMap();
+            imageEnvMapParamsEl.style.display = "";
+          } else {
+            clearImageEnvironmentMap();
+          }
+        });
+      } else {
+        loadImageEnvironmentMap();
+      }
 
       // 从场景光照生成环境贴图（使用 CubeCamera）
       function generateEnvironmentMapFromScene() {
@@ -581,14 +701,14 @@
                 child.material.forEach((mat) => {
                   if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                     mat.envMap = envMap;
-                    mat.envMapIntensity = 1.0;
+                    mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, 1.0);
                     mat.needsUpdate = true;
                   }
                 });
               } else {
                 if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
                   child.material.envMap = envMap;
-                  child.material.envMapIntensity = 1.0;
+                  child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, 1.0);
                   child.material.needsUpdate = true;
                 }
               }
@@ -655,20 +775,20 @@
               child.castShadow = true;
               child.receiveShadow = true;
               
-              // 如果已有环境贴图，应用到材质（不修改 transparent/opacity）
+              // 如果已有环境贴图，应用到材质（不修改 transparent/opacity）；透明材质使用补偿强度以保留反射
               if (envMap && child.material) {
                 if (Array.isArray(child.material)) {
                   child.material.forEach((mat) => {
                     if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                       mat.envMap = envMap;
-                      mat.envMapIntensity = 1.0;
+                      mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, 1.0);
                       mat.needsUpdate = true;
                     }
                   });
                 } else {
                   if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
                     child.material.envMap = envMap;
-                    child.material.envMapIntensity = 1.0;
+                    child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, 1.0);
                     child.material.needsUpdate = true;
                   }
                 }
@@ -786,11 +906,13 @@
           });
           console.log(allMeshes);
           
-          // 自动生成环境贴图
+          // 自动生成环境贴图（仅当未使用图片环境贴图时）
           setTimeout(() => {
             try {
-              generateEnvironmentMapFromScene();
-              console.log("环境贴图已自动生成");
+              if (!useImageEnvMap) {
+                generateEnvironmentMapFromScene();
+                console.log("环境贴图已自动生成");
+              }
               if (typeof syncPbrFromPanel === "function") syncPbrFromPanel();
             } catch (error) {
               console.warn("自动生成环境贴图失败:", error);
@@ -1204,10 +1326,11 @@
             mats.forEach((mat) => {
               if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                 const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
-                if (isTransparent) return;
-                mat.metalness = metalness;
-                mat.roughness = roughness;
-                mat.envMapIntensity = envMapIntensity;
+                if (!isTransparent) {
+                  mat.metalness = metalness;
+                  mat.roughness = roughness;
+                }
+                mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envMapIntensity);
                 if (envMap) mat.envMap = envMap;
                 mat.needsUpdate = true;
               }
@@ -1239,6 +1362,8 @@
 
       function applyTransparencyParams(opacity, alphaTest) {
         if (!modelRef) return;
+        const baseIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
+        const baseIntensity = baseIntensityEl ? parseFloat(baseIntensityEl.value) ?? 1 : 1;
         modelRef.traverse((child) => {
           if (child.isMesh && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -1247,6 +1372,8 @@
               if (isTransparent && (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial)) {
                 mat.opacity = opacity;
                 mat.alphaTest = alphaTest;
+                mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, baseIntensity);
+                if (envMap) mat.envMap = envMap;
                 mat.needsUpdate = true;
               }
             });
@@ -1463,7 +1590,7 @@
           clearTimeout(envMapRegenerateTimer);
         }
         envMapRegenerateTimer = setTimeout(() => {
-          if (modelRef && envMap) {
+          if (modelRef && envMap && !useImageEnvMap) {
             try {
               generateEnvironmentMapFromScene();
               console.log("环境贴图已根据新的光照参数重新生成");
