@@ -233,6 +233,16 @@
         margin-bottom: 0;
         min-width: 28px;
       }
+      #rightPbrPanel .pbr-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      #rightPbrPanel .pbr-toggle input {
+        margin: 0;
+      }
 
       /* 场景左下角：模型信息 */
       #modelInfoPanel {
@@ -386,6 +396,32 @@
         <div class="pbr-row">
           <label>值:</label>
           <input type="number" id="pbrEnvMapIntensityValue" min="0" max="2" step="0.05" value="1" />
+        </div>
+      </div>
+      <div class="pbr-group" style="margin-top:12px;">
+        <label class="pbr-toggle">
+          <input type="checkbox" id="pbrEnvEnabled" checked />
+          启用 PBR 与环境贴图
+        </label>
+      </div>
+      <div class="pbr-group" style="margin-top:12px; padding-top:10px; border-top:1px solid #ddd;">
+        <label class="pbr-toggle">
+          <input type="checkbox" id="pbrTransparencyEnabled" />
+          开启透明度渲染
+        </label>
+        <div id="pbrTransparencyControls" style="display:none; margin-top:8px;">
+          <label>透明度 (opacity)</label>
+          <input type="range" id="pbrOpacity" min="0" max="1" step="0.01" value="0.8" />
+          <div class="pbr-row">
+            <label>值:</label>
+            <input type="number" id="pbrOpacityValue" min="0" max="1" step="0.01" value="0.8" />
+          </div>
+          <label>Alpha 测试 (alphaTest)</label>
+          <input type="range" id="pbrAlphaTest" min="0" max="1" step="0.01" value="0" />
+          <div class="pbr-row">
+            <label>值:</label>
+            <input type="number" id="pbrAlphaTestValue" min="0" max="1" step="0.01" value="0" />
+          </div>
         </div>
       </div>
     </div>
@@ -640,24 +676,27 @@
             }
           });
 
-          // 透明材质修正：保证带透明度的材质正确显示
-          model.traverse((child) => {
-            if (child.isMesh && child.material) {
-              const mats = Array.isArray(child.material) ? child.material : [child.material];
-              let hasTransparent = false;
-              mats.forEach((mat) => {
-                const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
-                if (isTransparent) {
-                  hasTransparent = true;
-                  mat.transparent = true;
-                  mat.depthWrite = false;
-                  if (mat.side !== undefined) mat.side = THREE.DoubleSide;
-                  mat.needsUpdate = true;
-                }
-              });
-              if (hasTransparent) child.renderOrder = 1;
-            }
-          });
+          // 透明材质修正：仅当「开启透明度渲染」勾选时应用
+          const transparencyCheck = document.getElementById("pbrTransparencyEnabled");
+          if (transparencyCheck && transparencyCheck.checked) {
+            model.traverse((child) => {
+              if (child.isMesh && child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                let hasTransparent = false;
+                mats.forEach((mat) => {
+                  const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
+                  if (isTransparent) {
+                    hasTransparent = true;
+                    mat.transparent = true;
+                    mat.depthWrite = false;
+                    if (mat.side !== undefined) mat.side = THREE.DoubleSide;
+                    mat.needsUpdate = true;
+                  }
+                });
+                if (hasTransparent) child.renderOrder = 1;
+              }
+            });
+          }
 
           // 计算模型边界并居中
           const box = new THREE.Box3().setFromObject(model);
@@ -1138,19 +1177,76 @@
         }
       });
 
-      // 右侧 PBR 渲染面板：将参数应用到当前模型所有 PBR 材质（不修改透明材质，保留其透明度）
+      // 右侧 PBR 渲染面板：将参数应用到当前模型（可选关闭 PBR/环境贴图）
       function applyPbrToModel(metalness, roughness, envMapIntensity) {
         if (!modelRef) return;
+        const envEnabled = document.getElementById("pbrEnvEnabled") ? document.getElementById("pbrEnvEnabled").checked : true;
+        if (!envEnabled) {
+          scene.environment = null;
+          modelRef.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((mat) => {
+                if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                  mat.envMap = null;
+                  mat.envMapIntensity = 0;
+                  mat.needsUpdate = true;
+                }
+              });
+            }
+          });
+          return;
+        }
+        scene.environment = envMap;
         modelRef.traverse((child) => {
           if (child.isMesh && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach((mat) => {
               if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                 const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
-                if (isTransparent) return; // 透明材质不覆盖，保留原有表现
+                if (isTransparent) return;
                 mat.metalness = metalness;
                 mat.roughness = roughness;
                 mat.envMapIntensity = envMapIntensity;
+                if (envMap) mat.envMap = envMap;
+                mat.needsUpdate = true;
+              }
+            });
+          }
+        });
+      }
+
+      function applyTransparencyFix(enable) {
+        if (!modelRef) return;
+        modelRef.traverse((child) => {
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            let hasTransparent = false;
+            mats.forEach((mat) => {
+              const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
+              if (isTransparent) {
+                hasTransparent = true;
+                mat.transparent = enable;
+                mat.depthWrite = !enable;
+                if (mat.side !== undefined) mat.side = enable ? THREE.DoubleSide : THREE.FrontSide;
+                mat.needsUpdate = true;
+              }
+            });
+            child.renderOrder = hasTransparent && enable ? 1 : 0;
+          }
+        });
+      }
+
+      function applyTransparencyParams(opacity, alphaTest) {
+        if (!modelRef) return;
+        modelRef.traverse((child) => {
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
+              if (isTransparent && (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial)) {
+                mat.opacity = opacity;
+                mat.alphaTest = alphaTest;
                 mat.needsUpdate = true;
               }
             });
@@ -1192,6 +1288,47 @@
         syncPbrFromPanel();
       });
       pbrEnvMapIntensityValue.addEventListener("input", () => syncPbrFromPanel());
+
+      const pbrEnvEnabled = document.getElementById("pbrEnvEnabled");
+      const pbrTransparencyEnabled = document.getElementById("pbrTransparencyEnabled");
+      const pbrTransparencyControls = document.getElementById("pbrTransparencyControls");
+      const pbrOpacity = document.getElementById("pbrOpacity");
+      const pbrOpacityValue = document.getElementById("pbrOpacityValue");
+      const pbrAlphaTest = document.getElementById("pbrAlphaTest");
+      const pbrAlphaTestValue = document.getElementById("pbrAlphaTestValue");
+
+      if (pbrEnvEnabled) pbrEnvEnabled.addEventListener("change", () => syncPbrFromPanel());
+
+      if (pbrTransparencyEnabled) {
+        pbrTransparencyEnabled.addEventListener("change", (e) => {
+          const on = e.target.checked;
+          if (pbrTransparencyControls) pbrTransparencyControls.style.display = on ? "block" : "none";
+          applyTransparencyFix(on);
+          if (on) {
+            const op = parseFloat(pbrOpacityValue ? pbrOpacityValue.value : 0.8) || 0.8;
+            const at = parseFloat(pbrAlphaTestValue ? pbrAlphaTestValue.value : 0) || 0;
+            applyTransparencyParams(op, at);
+          }
+        });
+      }
+
+      function syncTransparencyFromPanel() {
+        const op = parseFloat(pbrOpacityValue ? pbrOpacityValue.value : 0.8) || 0.8;
+        const at = parseFloat(pbrAlphaTestValue ? pbrAlphaTestValue.value : 0) || 0;
+        applyTransparencyParams(op, at);
+      }
+      if (pbrOpacity) pbrOpacity.addEventListener("input", (e) => {
+        const v = parseFloat(e.target.value) ?? 0.8;
+        if (pbrOpacityValue) pbrOpacityValue.value = v.toFixed(2);
+        syncTransparencyFromPanel();
+      });
+      if (pbrOpacityValue) pbrOpacityValue.addEventListener("input", () => syncTransparencyFromPanel());
+      if (pbrAlphaTest) pbrAlphaTest.addEventListener("input", (e) => {
+        const v = parseFloat(e.target.value) || 0;
+        if (pbrAlphaTestValue) pbrAlphaTestValue.value = v.toFixed(2);
+        syncTransparencyFromPanel();
+      });
+      if (pbrAlphaTestValue) pbrAlphaTestValue.addEventListener("input", () => syncTransparencyFromPanel());
 
       // 场景与地面面板事件监听
       const modelPosX = document.getElementById("modelPosX");
