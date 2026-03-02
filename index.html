@@ -919,8 +919,12 @@
         printSceneTree(model, "");
         if (emptyEl) emptyEl.style.display = "none";
         const degToRad = (d) => (d * Math.PI) / 180;
-        const rotMin = -180, rotMax = 180, rotStep = 1;
-        const posMin = -10, posMax = 10, posStep = 0.01;
+        // 旋转范围缩小，避免轻微拖动就大幅运动（单位：度）
+        const rotMin = -90, rotMax = 90, rotStep = 0.5;
+        // 平移范围：与真实世界尺寸一致（单位：米，由 mm 换算）
+        const posXMin = -0.32388, posXMax = 0.32388, posXStep = 0.001;  // X 最大 323.88 mm
+        const posYMin = -0.1396, posYMax = 0.1396, posYStep = 0.001;    // Y 最大 139.6 mm
+        const posZMin = -0.14949, posZMax = 0.14949, posZStep = 0.001;   // Z 最大 149.49 mm
         // 仅针对机械臂关节：axis_x / axis_y / axis_z
         const targetNames = ["axis_x", "axis_y", "axis_z"];
         const targetNodes = targetNames
@@ -945,9 +949,9 @@
             '<div class="joint-row"><label>旋转X°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-x-range" /><input type="number" step="0.1" class="joint-rot-x" /></div>' +
             '<div class="joint-row"><label>旋转Y°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-y-range" /><input type="number" step="0.1" class="joint-rot-y" /></div>' +
             '<div class="joint-row"><label>旋转Z°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-z-range" /><input type="number" step="0.1" class="joint-rot-z" /></div>' +
-            '<div class="joint-row"><label>位置X</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-x-range" /><input type="number" step="0.01" class="joint-pos-x" /></div>' +
-            '<div class="joint-row"><label>位置Y</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-y-range" /><input type="number" step="0.01" class="joint-pos-y" /></div>' +
-            '<div class="joint-row"><label>位置Z</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-z-range" /><input type="number" step="0.01" class="joint-pos-z" /></div>';
+            '<div class="joint-row"><label>位置X(m)</label><input type="range" min="' + posXMin + '" max="' + posXMax + '" step="' + posXStep + '" class="joint-pos-x-range" /><input type="number" step="0.001" class="joint-pos-x" /></div>' +
+            '<div class="joint-row"><label>位置Y(m)</label><input type="range" min="' + posYMin + '" max="' + posYMax + '" step="' + posYStep + '" class="joint-pos-y-range" /><input type="number" step="0.001" class="joint-pos-y" /></div>' +
+            '<div class="joint-row"><label>位置Z(m)</label><input type="range" min="' + posZMin + '" max="' + posZMax + '" step="' + posZStep + '" class="joint-pos-z-range" /><input type="number" step="0.001" class="joint-pos-z" /></div>';
           const rotXRange = block.querySelector(".joint-rot-x-range");
           const rotYRange = block.querySelector(".joint-rot-y-range");
           const rotZRange = block.querySelector(".joint-rot-z-range");
@@ -965,17 +969,27 @@
             rangeEl.value = v;
             numEl.value = v.toFixed(2);
           };
-          const setPos = (p, rangeEl, numEl) => {
-            const v = Math.max(posMin, Math.min(posMax, p));
+          const setPosX = (p, rangeEl, numEl) => {
+            const v = Math.max(posXMin, Math.min(posXMax, p));
+            rangeEl.value = v;
+            numEl.value = v.toFixed(3);
+          };
+          const setPosY = (p, rangeEl, numEl) => {
+            const v = Math.max(posYMin, Math.min(posYMax, p));
+            rangeEl.value = v;
+            numEl.value = v.toFixed(3);
+          };
+          const setPosZ = (p, rangeEl, numEl) => {
+            const v = Math.max(posZMin, Math.min(posZMax, p));
             rangeEl.value = v;
             numEl.value = v.toFixed(3);
           };
           setRot(radToDeg(node.rotation.x), rotXRange, rotX);
           setRot(radToDeg(node.rotation.y), rotYRange, rotY);
           setRot(radToDeg(node.rotation.z), rotZRange, rotZ);
-          setPos(node.position.x, posXRange, posX);
-          setPos(node.position.y, posYRange, posY);
-          setPos(node.position.z, posZRange, posZ);
+          setPosX(node.position.x, posXRange, posX);
+          setPosY(node.position.y, posYRange, posY);
+          setPosZ(node.position.z, posZRange, posZ);
           const updateNode = () => {
             const rx = parseFloat(rotX.value) || 0;
             const ry = parseFloat(rotY.value) || 0;
@@ -988,9 +1002,9 @@
             rotXRange.value = Math.max(rotMin, Math.min(rotMax, rx));
             rotYRange.value = Math.max(rotMin, Math.min(rotMax, ry));
             rotZRange.value = Math.max(rotMin, Math.min(rotMax, rz));
-            posXRange.value = Math.max(posMin, Math.min(posMax, px));
-            posYRange.value = Math.max(posMin, Math.min(posMax, py));
-            posZRange.value = Math.max(posMin, Math.min(posMax, pz));
+            posXRange.value = Math.max(posXMin, Math.min(posXMax, px));
+            posYRange.value = Math.max(posYMin, Math.min(posYMax, py));
+            posZRange.value = Math.max(posZMin, Math.min(posZMax, pz));
             rotX.value = rx.toFixed(2);
             rotY.value = ry.toFixed(2);
             rotZ.value = rz.toFixed(2);
@@ -1003,17 +1017,19 @@
             numEl.value = isRot ? v.toFixed(2) : v.toFixed(3);
             updateNode();
           };
-          const syncNumToRange = (numEl, rangeEl, isRot) => {
+          const syncNumToRange = (numEl, rangeEl, isRot, pMin, pMax) => {
             const v = parseFloat(numEl.value);
             if (!isNaN(v)) {
-              rangeEl.value = Math.max(isRot ? rotMin : posMin, Math.min(isRot ? rotMax : posMax, v));
+              const low = isRot ? rotMin : pMin;
+              const high = isRot ? rotMax : pMax;
+              rangeEl.value = Math.max(low, Math.min(high, v));
               updateNode();
             }
           };
-          [[rotXRange, rotX, true], [rotYRange, rotY, true], [rotZRange, rotZ, true], [posXRange, posX, false], [posYRange, posY, false], [posZRange, posZ, false]].forEach(([rangeEl, numEl, isRot]) => {
+          [[rotXRange, rotX, true, 0, 0], [rotYRange, rotY, true, 0, 0], [rotZRange, rotZ, true, 0, 0], [posXRange, posX, false, posXMin, posXMax], [posYRange, posY, false, posYMin, posYMax], [posZRange, posZ, false, posZMin, posZMax]].forEach(([rangeEl, numEl, isRot, pMin, pMax]) => {
             rangeEl.addEventListener("input", () => syncRangeToNum(rangeEl, numEl, isRot));
-            numEl.addEventListener("input", () => syncNumToRange(numEl, rangeEl, isRot));
-            numEl.addEventListener("change", () => syncNumToRange(numEl, rangeEl, isRot));
+            numEl.addEventListener("input", () => syncNumToRange(numEl, rangeEl, isRot, pMin, pMax));
+            numEl.addEventListener("change", () => syncNumToRange(numEl, rangeEl, isRot, pMin, pMax));
           });
           listEl.appendChild(block);
         });
