@@ -619,7 +619,7 @@
               child.castShadow = true;
               child.receiveShadow = true;
               
-              // 如果已有环境贴图，应用到材质
+              // 如果已有环境贴图，应用到材质（不修改 transparent/opacity）
               if (envMap && child.material) {
                 if (Array.isArray(child.material)) {
                   child.material.forEach((mat) => {
@@ -637,6 +637,25 @@
                   }
                 }
               }
+            }
+          });
+
+          // 透明材质修正：保证带透明度的材质正确显示
+          model.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              let hasTransparent = false;
+              mats.forEach((mat) => {
+                const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
+                if (isTransparent) {
+                  hasTransparent = true;
+                  mat.transparent = true;
+                  mat.depthWrite = false;
+                  if (mat.side !== undefined) mat.side = THREE.DoubleSide;
+                  mat.needsUpdate = true;
+                }
+              });
+              if (hasTransparent) child.renderOrder = 1;
             }
           });
 
@@ -1119,7 +1138,7 @@
         }
       });
 
-      // 右侧 PBR 渲染面板：将参数应用到当前模型所有 PBR 材质
+      // 右侧 PBR 渲染面板：将参数应用到当前模型所有 PBR 材质（不修改透明材质，保留其透明度）
       function applyPbrToModel(metalness, roughness, envMapIntensity) {
         if (!modelRef) return;
         modelRef.traverse((child) => {
@@ -1127,6 +1146,8 @@
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach((mat) => {
               if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
+                if (isTransparent) return; // 透明材质不覆盖，保留原有表现
                 mat.metalness = metalness;
                 mat.roughness = roughness;
                 mat.envMapIntensity = envMapIntensity;
