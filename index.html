@@ -244,7 +244,86 @@
         margin: 0;
       }
 
-      /* 场景左下角：模型信息 */
+      /* 右侧面板容器：PBR + 关节控制 垂直排列 */
+      #rightPanelsContainer {
+        position: absolute;
+        top: 120px;
+        right: 20px;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 85vh;
+        overflow-y: auto;
+        align-items: flex-end;
+      }
+      #rightPbrPanel {
+        position: static;
+        top: auto;
+        right: auto;
+      }
+      /* 关节控制面板 */
+      #jointPanel {
+        background-color: #fff;
+        border: 2px solid #333;
+        border-radius: 5px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        min-width: 220px;
+      }
+      #jointPanel h3 {
+        margin: 0 0 12px 0;
+        font-size: 15px;
+        font-weight: bold;
+        color: #333;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 6px;
+      }
+      #jointPanelList {
+        max-height: 40vh;
+        overflow-y: auto;
+      }
+      #jointPanel .joint-node {
+        margin-bottom: 12px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fafafa;
+      }
+      #jointPanel .joint-node-name {
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 6px;
+        word-break: break-all;
+      }
+      #jointPanel .joint-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      #jointPanel .joint-row label {
+        min-width: 42px;
+        font-size: 11px;
+        color: #555;
+      }
+      #jointPanel .joint-row input[type="range"] {
+        flex: 1;
+        min-width: 60px;
+        margin: 0 4px 0 0;
+      }
+      #jointPanel .joint-row input[type="number"] {
+        width: 52px;
+        padding: 3px;
+        font-size: 11px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      #jointPanelEmpty {
+        font-size: 12px;
+        color: #888;
+        padding: 8px 0;
+      }
       #modelInfoPanel {
         position: absolute;
         left: 20px;
@@ -372,6 +451,7 @@
     <button id="uploadButton">上传GLB模型</button>
     <input type="file" id="fileInput" accept=".glb,.gltf" />
 
+    <div id="rightPanelsContainer">
     <div id="rightPbrPanel">
       <h3>PBR 渲染</h3>
       <div class="pbr-group">
@@ -430,6 +510,14 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="jointPanel">
+      <h3>关节控制</h3>
+      <div id="jointPanelList">
+        <div id="jointPanelEmpty">请先加载模型</div>
+      </div>
+    </div>
     </div>
 
     <script type="importmap">
@@ -758,7 +846,182 @@
 
           modelRef = null;
           modelAxesHelper = null;
+          buildJointPanel(null);
         }
+      }
+
+      // 递归遍历模型节点，按树状结构打印 name / type / uuid / position / rotation（带缩进）
+      function printSceneTree(node, indent, isLast) {
+        if (indent === undefined) indent = "";
+        if (isLast === undefined) isLast = true;
+        const radToDeg = (r) => (r * 180) / Math.PI;
+        const name = (node.name && node.name.trim() !== "") ? node.name : "(未命名)";
+        const pos = node.position;
+        const rot = node.rotation;
+        const rotDeg = { x: Number(radToDeg(rot.x).toFixed(2)), y: Number(radToDeg(rot.y).toFixed(2)), z: Number(radToDeg(rot.z).toFixed(2)) };
+        const branch = isLast ? "└─ " : "├─ ";
+        const parentInfo = node.parent
+          ? (" | parent.name: " + (node.parent.name && node.parent.name.trim() !== "" ? node.parent.name : "(未命名)") + " | parent.uuid: " + node.parent.uuid)
+          : " | parent: (无)";
+        console.log(
+          indent + branch + name +
+          " | type: " + node.type +
+          " | uuid: " + node.uuid +
+          parentInfo +
+          " | position: (" + pos.x.toFixed(3) + ", " + pos.y.toFixed(3) + ", " + pos.z.toFixed(3) + ")" +
+          " | rotation°: (" + rotDeg.x + ", " + rotDeg.y + ", " + rotDeg.z + ")"
+        );
+        const children = node.children || [];
+        const nextIndent = indent + (isLast ? "   " : "│  ");
+        for (let i = 0; i < children.length; i++) {
+          printSceneTree(children[i], nextIndent, i === children.length - 1);
+        }
+      }
+
+      // 关节控制面板：根据当前模型构建节点列表并绑定 rotation/position
+      function buildJointPanel(model) {
+        const listEl = document.getElementById("jointPanelList");
+        const emptyEl = document.getElementById("jointPanelEmpty");
+        if (!listEl) return;
+        // 只移除动态添加的关节节点，保留空状态元素以便重复使用
+        Array.from(listEl.children).forEach((c) => {
+          if (c.classList && c.classList.contains("joint-node")) listEl.removeChild(c);
+        });
+        if (emptyEl) emptyEl.style.display = "";
+        if (!model) {
+          if (emptyEl) {
+            emptyEl.textContent = "请先加载模型";
+            emptyEl.style.display = "";
+          }
+          return;
+        }
+        const allNodes = [];
+        model.traverse((n) => allNodes.push(n));
+        if (allNodes.length === 0) {
+          if (emptyEl) {
+            emptyEl.textContent = "当前模型无可用节点";
+            emptyEl.style.display = "";
+          }
+          return;
+        }
+        const radToDeg = (r) => (r * 180) / Math.PI;
+        const nodeInfos = allNodes.map((n, i) => ({
+          index: i,
+          name: n.name && n.name.trim() !== "" ? n.name : "(未命名)",
+          type: n.type,
+          uuid: n.uuid,
+          position: { x: n.position.x, y: n.position.y, z: n.position.z },
+          rotationDeg: { x: Number(radToDeg(n.rotation.x).toFixed(2)), y: Number(radToDeg(n.rotation.y).toFixed(2)), z: Number(radToDeg(n.rotation.z).toFixed(2)) },
+          childrenCount: n.children ? n.children.length : 0
+        }));
+        console.log("关节节点列表 (" + allNodes.length + " 个):", nodeInfos);
+        console.log("========== 模型节点树（父子层级） ==========");
+        printSceneTree(model, "");
+        if (emptyEl) emptyEl.style.display = "none";
+        const degToRad = (d) => (d * Math.PI) / 180;
+        const rotMin = -180, rotMax = 180, rotStep = 1;
+        const posMin = -10, posMax = 10, posStep = 0.01;
+        // 仅针对机械臂关节：axis_x / axis_y / axis_z
+        const targetNames = ["axis_x", "axis_y", "axis_z"];
+        const targetNodes = targetNames
+          .map((jointName) => {
+            const n = model.getObjectByName(jointName);
+            return n ? { node: n, label: jointName } : null;
+          })
+          .filter((item) => item !== null);
+        if (targetNodes.length === 0) {
+          if (emptyEl) {
+            emptyEl.textContent = "当前模型未找到 axis_x / axis_y / axis_z 关节";
+            emptyEl.style.display = "";
+          }
+          return;
+        }
+        targetNodes.forEach(({ node, label }, index) => {
+          const name = label;
+          const block = document.createElement("div");
+          block.className = "joint-node";
+          block.innerHTML =
+            '<div class="joint-node-name">' + escapeHtml(name) + "</div>" +
+            '<div class="joint-row"><label>旋转X°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-x-range" /><input type="number" step="0.1" class="joint-rot-x" /></div>' +
+            '<div class="joint-row"><label>旋转Y°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-y-range" /><input type="number" step="0.1" class="joint-rot-y" /></div>' +
+            '<div class="joint-row"><label>旋转Z°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-z-range" /><input type="number" step="0.1" class="joint-rot-z" /></div>' +
+            '<div class="joint-row"><label>位置X</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-x-range" /><input type="number" step="0.01" class="joint-pos-x" /></div>' +
+            '<div class="joint-row"><label>位置Y</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-y-range" /><input type="number" step="0.01" class="joint-pos-y" /></div>' +
+            '<div class="joint-row"><label>位置Z</label><input type="range" min="' + posMin + '" max="' + posMax + '" step="' + posStep + '" class="joint-pos-z-range" /><input type="number" step="0.01" class="joint-pos-z" /></div>';
+          const rotXRange = block.querySelector(".joint-rot-x-range");
+          const rotYRange = block.querySelector(".joint-rot-y-range");
+          const rotZRange = block.querySelector(".joint-rot-z-range");
+          const rotX = block.querySelector(".joint-rot-x");
+          const rotY = block.querySelector(".joint-rot-y");
+          const rotZ = block.querySelector(".joint-rot-z");
+          const posXRange = block.querySelector(".joint-pos-x-range");
+          const posYRange = block.querySelector(".joint-pos-y-range");
+          const posZRange = block.querySelector(".joint-pos-z-range");
+          const posX = block.querySelector(".joint-pos-x");
+          const posY = block.querySelector(".joint-pos-y");
+          const posZ = block.querySelector(".joint-pos-z");
+          const setRot = (r, rangeEl, numEl) => {
+            const v = Math.max(rotMin, Math.min(rotMax, r));
+            rangeEl.value = v;
+            numEl.value = v.toFixed(2);
+          };
+          const setPos = (p, rangeEl, numEl) => {
+            const v = Math.max(posMin, Math.min(posMax, p));
+            rangeEl.value = v;
+            numEl.value = v.toFixed(3);
+          };
+          setRot(radToDeg(node.rotation.x), rotXRange, rotX);
+          setRot(radToDeg(node.rotation.y), rotYRange, rotY);
+          setRot(radToDeg(node.rotation.z), rotZRange, rotZ);
+          setPos(node.position.x, posXRange, posX);
+          setPos(node.position.y, posYRange, posY);
+          setPos(node.position.z, posZRange, posZ);
+          const updateNode = () => {
+            const rx = parseFloat(rotX.value) || 0;
+            const ry = parseFloat(rotY.value) || 0;
+            const rz = parseFloat(rotZ.value) || 0;
+            const px = parseFloat(posX.value) || 0;
+            const py = parseFloat(posY.value) || 0;
+            const pz = parseFloat(posZ.value) || 0;
+            node.rotation.set(degToRad(rx), degToRad(ry), degToRad(rz));
+            node.position.set(px, py, pz);
+            rotXRange.value = Math.max(rotMin, Math.min(rotMax, rx));
+            rotYRange.value = Math.max(rotMin, Math.min(rotMax, ry));
+            rotZRange.value = Math.max(rotMin, Math.min(rotMax, rz));
+            posXRange.value = Math.max(posMin, Math.min(posMax, px));
+            posYRange.value = Math.max(posMin, Math.min(posMax, py));
+            posZRange.value = Math.max(posMin, Math.min(posMax, pz));
+            rotX.value = rx.toFixed(2);
+            rotY.value = ry.toFixed(2);
+            rotZ.value = rz.toFixed(2);
+            posX.value = px.toFixed(3);
+            posY.value = py.toFixed(3);
+            posZ.value = pz.toFixed(3);
+          };
+          const syncRangeToNum = (rangeEl, numEl, isRot) => {
+            const v = parseFloat(rangeEl.value);
+            numEl.value = isRot ? v.toFixed(2) : v.toFixed(3);
+            updateNode();
+          };
+          const syncNumToRange = (numEl, rangeEl, isRot) => {
+            const v = parseFloat(numEl.value);
+            if (!isNaN(v)) {
+              rangeEl.value = Math.max(isRot ? rotMin : posMin, Math.min(isRot ? rotMax : posMax, v));
+              updateNode();
+            }
+          };
+          [[rotXRange, rotX, true], [rotYRange, rotY, true], [rotZRange, rotZ, true], [posXRange, posX, false], [posYRange, posY, false], [posZRange, posZ, false]].forEach(([rangeEl, numEl, isRot]) => {
+            rangeEl.addEventListener("input", () => syncRangeToNum(rangeEl, numEl, isRot));
+            numEl.addEventListener("input", () => syncNumToRange(numEl, rangeEl, isRot));
+            numEl.addEventListener("change", () => syncNumToRange(numEl, rangeEl, isRot));
+          });
+          listEl.appendChild(block);
+        });
+      }
+      function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = s;
+        return div.innerHTML;
       }
 
       // 加载模型的通用函数
@@ -918,6 +1181,7 @@
               console.warn("自动生成环境贴图失败:", error);
             }
           }, 100);
+          buildJointPanel(modelRef);
         };
 
         const onProgress = (progress) => {
@@ -953,7 +1217,7 @@
       }
 
       // 初始加载模型
-      loadModel("./tongren12.glb");
+      loadModel("./xyz_test01.glb");
 
       // 格式化文件大小
       function formatBytes(bytes) {
