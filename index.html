@@ -424,7 +424,7 @@
       </div>
       <div class="lighting-control-group">
         <div class="lighting-toggle">
-          <input type="checkbox" id="shadowEnabled" checked />
+          <input type="checkbox" id="shadowEnabled" />
           <label for="shadowEnabled">阴影开关</label>
         </div>
         <label>阴影柔和度</label>
@@ -539,7 +539,7 @@
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.enabled = false;
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xcccccc);
@@ -559,7 +559,7 @@
       // 添加方向光
       const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
       dirLight.position.set(5, 10, 7.5);
-      dirLight.castShadow = true;
+      dirLight.castShadow = false;
       dirLight.shadow.mapSize.width = 2048;
       dirLight.shadow.mapSize.height = 2048;
       dirLight.shadow.camera.near = 0.5;
