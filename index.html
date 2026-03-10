@@ -1013,10 +1013,10 @@
         const degToRad = (d) => (d * Math.PI) / 180;
         // 旋转范围缩小，避免轻微拖动就大幅运动（单位：度）
         const rotMin = -90, rotMax = 90, rotStep = 0.5;
-        // 平移范围：与真实世界尺寸一致（单位：米，由 mm 换算）
-        const posXMin = -0.32388, posXMax = 0.32388, posXStep = 0.001;  // X 最大 323.88 mm
-        const posYMin = -0.1396, posYMax = 0.1396, posYStep = 0.001;    // Y 最大 139.6 mm
-        const posZMin = -0.14949, posZMax = 0.14949, posZStep = 0.001;   // Z 最大 149.49 mm
+        // 平移范围：与真实世界尺寸一致，作为在当前初始位置上的“偏移量”（单位：米，由 mm 换算）
+        const posXMin = -0.32388, posXMax = 0.32388, posXStep = 0.001;  // X 最大行程 323.88 mm
+        const posYMin = -0.1396, posYMax = 0.1396, posYStep = 0.001;    // Y 最大行程 139.6 mm
+        const posZMin = -0.14949, posZMax = 0.14949, posZStep = 0.001;   // Z 最大行程 149.49 mm
         // 仅针对机械臂关节：axis_x / axis_y / axis_z
         const targetNames = ["axis_x", "axis_y", "axis_z"];
         const targetNodes = targetNames
@@ -1034,6 +1034,8 @@
         }
         targetNodes.forEach(({ node, label }, index) => {
           const name = label;
+          // 记录每个关节当前的基准位置，位置滑块表示在此基础上的“偏移量”
+          const basePos = node.position.clone();
           const block = document.createElement("div");
           block.className = "joint-node";
           block.innerHTML =
@@ -1061,42 +1063,46 @@
             rangeEl.value = v;
             numEl.value = v.toFixed(2);
           };
-          const setPosX = (p, rangeEl, numEl) => {
-            const v = Math.max(posXMin, Math.min(posXMax, p));
-            rangeEl.value = v;
-            numEl.value = v.toFixed(3);
+          // 位置控件默认从 0 开始，表示“相对当前初始位置的偏移量”，避免一上来就把关节拉回原点
+          const setPosX = (delta, rangeEl, numEl) => {
+            rangeEl.value = delta;
+            numEl.value = delta.toFixed(3);
           };
-          const setPosY = (p, rangeEl, numEl) => {
-            const v = Math.max(posYMin, Math.min(posYMax, p));
-            rangeEl.value = v;
-            numEl.value = v.toFixed(3);
+          const setPosY = (delta, rangeEl, numEl) => {
+            rangeEl.value = delta;
+            numEl.value = delta.toFixed(3);
           };
-          const setPosZ = (p, rangeEl, numEl) => {
-            const v = Math.max(posZMin, Math.min(posZMax, p));
-            rangeEl.value = v;
-            numEl.value = v.toFixed(3);
+          const setPosZ = (delta, rangeEl, numEl) => {
+            rangeEl.value = delta;
+            numEl.value = delta.toFixed(3);
           };
           setRot(radToDeg(node.rotation.x), rotXRange, rotX);
           setRot(radToDeg(node.rotation.y), rotYRange, rotY);
           setRot(radToDeg(node.rotation.z), rotZRange, rotZ);
-          setPosX(node.position.x, posXRange, posX);
-          setPosY(node.position.y, posYRange, posY);
-          setPosZ(node.position.z, posZRange, posZ);
+          // 初始偏移量为 0（当前位置为基准）
+          setPosX(0, posXRange, posX);
+          setPosY(0, posYRange, posY);
+          setPosZ(0, posZRange, posZ);
           const updateNode = () => {
             const rx = parseFloat(rotX.value) || 0;
             const ry = parseFloat(rotY.value) || 0;
             const rz = parseFloat(rotZ.value) || 0;
-            const px = parseFloat(posX.value) || 0;
-            const py = parseFloat(posY.value) || 0;
-            const pz = parseFloat(posZ.value) || 0;
+            let px = parseFloat(posX.value) || 0;
+            let py = parseFloat(posY.value) || 0;
+            let pz = parseFloat(posZ.value) || 0;
+            // 将偏移量限制在机械臂的真实行程范围内
+            px = Math.max(posXMin, Math.min(posXMax, px));
+            py = Math.max(posYMin, Math.min(posYMax, py));
+            pz = Math.max(posZMin, Math.min(posZMax, pz));
             node.rotation.set(degToRad(rx), degToRad(ry), degToRad(rz));
-            node.position.set(px, py, pz);
+            // 位置 = 初始基准位置 + 偏移量
+            node.position.set(basePos.x + px, basePos.y + py, basePos.z + pz);
             rotXRange.value = Math.max(rotMin, Math.min(rotMax, rx));
             rotYRange.value = Math.max(rotMin, Math.min(rotMax, ry));
             rotZRange.value = Math.max(rotMin, Math.min(rotMax, rz));
-            posXRange.value = Math.max(posXMin, Math.min(posXMax, px));
-            posYRange.value = Math.max(posYMin, Math.min(posYMax, py));
-            posZRange.value = Math.max(posZMin, Math.min(posZMax, pz));
+            posXRange.value = px;
+            posYRange.value = py;
+            posZRange.value = pz;
             rotX.value = rx.toFixed(2);
             rotY.value = ry.toFixed(2);
             rotZ.value = rz.toFixed(2);
