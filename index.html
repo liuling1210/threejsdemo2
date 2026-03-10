@@ -482,6 +482,10 @@
             <label>值:</label>
             <input type="number" id="pbrEnvMapIntensityValue" min="0" max="2" step="0.05" value="1" />
           </div>
+          <div style="margin-top:8px;">
+            <button type="button" id="uploadEnvMapButton" style="width:100%; padding:6px; font-size:12px; cursor:pointer; border:1px solid #ccc; border-radius:4px; background:#f5f5f5;">上传本地环境贴图</button>
+            <input type="file" id="envMapFileInput" accept="image/*" style="display:none;" />
+          </div>
         </div>
       </div>
       <div class="pbr-group" style="margin-top:12px;">
@@ -615,6 +619,7 @@
 
       // 环境贴图相关变量
       let envMap = null; // 存储生成的环境贴图
+      let envMapBackgroundTexture = null; // 用于 scene.background 的等距柱状图，关闭环境贴图时需 dispose
       let cubeCamera = null; // CubeCamera 实例
       let useImageEnvMap = false; // 是否使用图片环境贴图（为 true 时不使用 CubeCamera 覆盖）
       const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -637,7 +642,11 @@
             texture.mapping = THREE.EquirectangularReflectionMapping;
             texture.colorSpace = THREE.SRGBColorSpace;
             const cubeEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
-            texture.dispose();
+            // 清理旧的背景贴图
+            if (envMapBackgroundTexture) {
+              envMapBackgroundTexture.dispose();
+              envMapBackgroundTexture = null;
+            }
             // 清理旧的环境贴图
             if (envMap) {
               envMap.dispose();
@@ -650,6 +659,8 @@
             }
             envMap = cubeEnvMap;
             scene.environment = envMap;
+            scene.background = texture;
+            envMapBackgroundTexture = texture;
             useImageEnvMap = true;
             const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
             const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
@@ -679,7 +690,71 @@
             console.log("环境贴图 huanjingtietu.png 已加载并应用");
           },
           undefined,
-          (err) => console.warn("加载环境贴图 huanjingtietu.png 失败:", err)
+            (err) => console.warn("加载环境贴图 huanjingtietu.png 失败:", err)
+        );
+      }
+
+      // 从本地文件上传并设为环境贴图（全景图 / 等距柱状图）
+      function loadEnvironmentMapFromFile(file) {
+        if (!file || !file.type.startsWith("image/")) return;
+        const url = URL.createObjectURL(file);
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          url,
+          (texture) => {
+            URL.revokeObjectURL(url);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const cubeEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
+            if (envMapBackgroundTexture) {
+              envMapBackgroundTexture.dispose();
+              envMapBackgroundTexture = null;
+            }
+            if (envMap) {
+              envMap.dispose();
+              envMap = null;
+            }
+            if (cubeCamera) {
+              cubeCamera.renderTarget.dispose();
+              scene.remove(cubeCamera);
+              cubeCamera = null;
+            }
+            envMap = cubeEnvMap;
+            scene.environment = envMap;
+            scene.background = texture;
+            envMapBackgroundTexture = texture;
+            useImageEnvMap = true;
+            const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
+            const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
+            if (modelRef) {
+              modelRef.traverse((child) => {
+                if (child.isMesh && child.material) {
+                  if (Array.isArray(child.material)) {
+                    child.material.forEach((mat) => {
+                      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                        mat.envMap = envMap;
+                        mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envIntensity);
+                        mat.needsUpdate = true;
+                      }
+                    });
+                  } else {
+                    if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+                      child.material.envMap = envMap;
+                      child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, envIntensity);
+                      child.material.needsUpdate = true;
+                    }
+                  }
+                }
+              });
+            }
+            if (typeof syncPbrFromPanel === "function") syncPbrFromPanel();
+            console.log("本地环境贴图已加载并应用:", file.name);
+          },
+          undefined,
+          (err) => {
+            URL.revokeObjectURL(url);
+            console.warn("加载本地环境贴图失败:", err);
+          }
         );
       }
 
@@ -690,7 +765,14 @@
           envMap.dispose();
           envMap = null;
         }
+        if (envMapBackgroundTexture) {
+          envMapBackgroundTexture.dispose();
+          envMapBackgroundTexture = null;
+        }
         scene.environment = null;
+        const bgColorEl = document.getElementById("sceneBgColor");
+        if (bgColorEl) scene.background.setStyle(bgColorEl.value);
+        else scene.background = new THREE.Color(0xcccccc);
         if (modelRef) {
           modelRef.traverse((child) => {
             if (child.isMesh && child.material) {
@@ -727,6 +809,16 @@
             clearImageEnvironmentMap();
           }
         });
+        const uploadEnvMapBtn = document.getElementById("uploadEnvMapButton");
+        const envMapFileInput = document.getElementById("envMapFileInput");
+        if (uploadEnvMapBtn && envMapFileInput) {
+          uploadEnvMapBtn.addEventListener("click", () => envMapFileInput.click());
+          envMapFileInput.addEventListener("change", (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) loadEnvironmentMapFromFile(file);
+            e.target.value = "";
+          });
+        }
       } else {
         loadImageEnvironmentMap();
       }
