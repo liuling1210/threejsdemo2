@@ -1013,7 +1013,7 @@
         const degToRad = (d) => (d * Math.PI) / 180;
         // 旋转范围缩小，避免轻微拖动就大幅运动（单位：度）
         const rotMin = -90, rotMax = 90, rotStep = 0.5;
-        // 平移范围：与真实世界尺寸一致，直接使用相对父节点的真实 position（单位：mm）
+        // 平移范围：与真实世界尺寸一致，表示相对当前姿态的偏移量 Δ（单位：mm）
         const posXMin = -323.88, posXMax = 323.88, posXStep = 0.1;  // X 最大行程 323.88 mm
         const posYMin = -139.6, posYMax = 139.6, posYStep = 0.1;    // Y 最大行程 139.6 mm
         const posZMin = -149.49, posZMax = 149.49, posZStep = 0.1;  // Z 最大行程 149.49 mm
@@ -1034,6 +1034,8 @@
         }
         targetNodes.forEach(({ node, label }, index) => {
           const name = label;
+          // 方案一：记录当前姿态为基准，面板上的平移为相对此基准的偏移量 Δ（mm），初始为 0，避免首次拖动抖动
+          const basePos = node.position.clone();
           const block = document.createElement("div");
           block.className = "joint-node";
           block.innerHTML =
@@ -1041,9 +1043,9 @@
             '<div class="joint-row"><label>旋转X°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-x-range" /><input type="number" step="0.1" class="joint-rot-x" /></div>' +
             '<div class="joint-row"><label>旋转Y°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-y-range" /><input type="number" step="0.1" class="joint-rot-y" /></div>' +
             '<div class="joint-row"><label>旋转Z°</label><input type="range" min="' + rotMin + '" max="' + rotMax + '" step="' + rotStep + '" class="joint-rot-z-range" /><input type="number" step="0.1" class="joint-rot-z" /></div>' +
-            '<div class="joint-row"><label>位置X(mm)</label><input type="range" min="' + posXMin + '" max="' + posXMax + '" step="' + posXStep + '" class="joint-pos-x-range" /><input type="number" step="0.1" class="joint-pos-x" /></div>' +
-            '<div class="joint-row"><label>位置Y(mm)</label><input type="range" min="' + posYMin + '" max="' + posYMax + '" step="' + posYStep + '" class="joint-pos-y-range" /><input type="number" step="0.1" class="joint-pos-y" /></div>' +
-            '<div class="joint-row"><label>位置Z(mm)</label><input type="range" min="' + posZMin + '" max="' + posZMax + '" step="' + posZStep + '" class="joint-pos-z-range" /><input type="number" step="0.1" class="joint-pos-z" /></div>';
+            '<div class="joint-row"><label>偏移X(mm)</label><input type="range" min="' + posXMin + '" max="' + posXMax + '" step="' + posXStep + '" class="joint-pos-x-range" /><input type="number" step="0.1" class="joint-pos-x" /></div>' +
+            '<div class="joint-row"><label>偏移Y(mm)</label><input type="range" min="' + posYMin + '" max="' + posYMax + '" step="' + posYStep + '" class="joint-pos-y-range" /><input type="number" step="0.1" class="joint-pos-y" /></div>' +
+            '<div class="joint-row"><label>偏移Z(mm)</label><input type="range" min="' + posZMin + '" max="' + posZMax + '" step="' + posZStep + '" class="joint-pos-z-range" /><input type="number" step="0.1" class="joint-pos-z" /></div>';
           const rotXRange = block.querySelector(".joint-rot-x-range");
           const rotYRange = block.querySelector(".joint-rot-y-range");
           const rotZRange = block.querySelector(".joint-rot-z-range");
@@ -1076,10 +1078,10 @@
           setRot(radToDeg(node.rotation.x), rotXRange, rotX);
           setRot(radToDeg(node.rotation.y), rotYRange, rotY);
           setRot(radToDeg(node.rotation.z), rotZRange, rotZ);
-          // 初始位置使用相对父节点的真实 position（单位：m 转 mm）
-          setPosX(node.position.x * 1000, posXRange, posX);
-          setPosY(node.position.y * 1000, posYRange, posY);
-          setPosZ(node.position.z * 1000, posZRange, posZ);
+          // 方案一：偏移量初始为 0，保持当前姿态不变，避免首次拖动抖动
+          setPosX(0, posXRange, posX);
+          setPosY(0, posYRange, posY);
+          setPosZ(0, posZRange, posZ);
           const updateNode = () => {
             const rx = parseFloat(rotX.value) || 0;
             const ry = parseFloat(rotY.value) || 0;
@@ -1087,13 +1089,13 @@
             let px = parseFloat(posX.value) || 0;
             let py = parseFloat(posY.value) || 0;
             let pz = parseFloat(posZ.value) || 0;
-            // 将位置限制在机械臂的真实行程范围内（单位：mm）
+            // 将偏移量限制在机械臂真实行程范围内（单位：mm）
             px = Math.max(posXMin, Math.min(posXMax, px));
             py = Math.max(posYMin, Math.min(posYMax, py));
             pz = Math.max(posZMin, Math.min(posZMax, pz));
             node.rotation.set(degToRad(rx), degToRad(ry), degToRad(rz));
-            // 位置 = 直接使用相对父节点的真实 position（mm 换算为 m）
-            node.position.set(px / 1000, py / 1000, pz / 1000);
+            // 位置 = 基准位置 + 偏移量（mm 转 m）
+            node.position.set(basePos.x + px / 1000, basePos.y + py / 1000, basePos.z + pz / 1000);
             rotXRange.value = Math.max(rotMin, Math.min(rotMax, rx));
             rotYRange.value = Math.max(rotMin, Math.min(rotMax, ry));
             rotZRange.value = Math.max(rotMin, Math.min(rotMax, rz));
