@@ -1013,7 +1013,7 @@
         const degToRad = (d) => (d * Math.PI) / 180;
         // 旋转范围缩小，避免轻微拖动就大幅运动（单位：度）
         const rotMin = -90, rotMax = 90, rotStep = 0.5;
-        // 平移范围：与真实世界尺寸一致，作为在当前初始位置上的“偏移量”（单位：mm）
+        // 平移范围：与真实世界尺寸一致，直接使用相对父节点的真实 position（单位：mm）
         const posXMin = -323.88, posXMax = 323.88, posXStep = 0.1;  // X 最大行程 323.88 mm
         const posYMin = -139.6, posYMax = 139.6, posYStep = 0.1;    // Y 最大行程 139.6 mm
         const posZMin = -149.49, posZMax = 149.49, posZStep = 0.1;  // Z 最大行程 149.49 mm
@@ -1034,8 +1034,6 @@
         }
         targetNodes.forEach(({ node, label }, index) => {
           const name = label;
-          // 记录每个关节当前的基准位置，位置滑块表示在此基础上的“偏移量”
-          const basePos = node.position.clone();
           const block = document.createElement("div");
           block.className = "joint-node";
           block.innerHTML =
@@ -1063,7 +1061,6 @@
             rangeEl.value = v;
             numEl.value = v.toFixed(2);
           };
-          // 位置控件默认从 0 开始，表示“相对当前初始位置的偏移量”，避免一上来就把关节拉回原点
           const setPosX = (delta, rangeEl, numEl) => {
             rangeEl.value = delta;
             numEl.value = delta.toFixed(1);
@@ -1079,10 +1076,10 @@
           setRot(radToDeg(node.rotation.x), rotXRange, rotX);
           setRot(radToDeg(node.rotation.y), rotYRange, rotY);
           setRot(radToDeg(node.rotation.z), rotZRange, rotZ);
-          // 初始偏移量为 0（当前位置为基准）
-          setPosX(0, posXRange, posX);
-          setPosY(0, posYRange, posY);
-          setPosZ(0, posZRange, posZ);
+          // 初始位置使用相对父节点的真实 position（单位：m 转 mm）
+          setPosX(node.position.x * 1000, posXRange, posX);
+          setPosY(node.position.y * 1000, posYRange, posY);
+          setPosZ(node.position.z * 1000, posZRange, posZ);
           const updateNode = () => {
             const rx = parseFloat(rotX.value) || 0;
             const ry = parseFloat(rotY.value) || 0;
@@ -1090,13 +1087,13 @@
             let px = parseFloat(posX.value) || 0;
             let py = parseFloat(posY.value) || 0;
             let pz = parseFloat(posZ.value) || 0;
-            // 将偏移量限制在机械臂的真实行程范围内（单位：mm）
+            // 将位置限制在机械臂的真实行程范围内（单位：mm）
             px = Math.max(posXMin, Math.min(posXMax, px));
             py = Math.max(posYMin, Math.min(posYMax, py));
             pz = Math.max(posZMin, Math.min(posZMax, pz));
             node.rotation.set(degToRad(rx), degToRad(ry), degToRad(rz));
-            // 位置 = 初始基准位置 + 偏移量（mm 换算为 m）
-            node.position.set(basePos.x + px / 1000, basePos.y + py / 1000, basePos.z + pz / 1000);
+            // 位置 = 直接使用相对父节点的真实 position（mm 换算为 m）
+            node.position.set(px / 1000, py / 1000, pz / 1000);
             rotXRange.value = Math.max(rotMin, Math.min(rotMax, rx));
             rotYRange.value = Math.max(rotMin, Math.min(rotMax, ry));
             rotZRange.value = Math.max(rotMin, Math.min(rotMax, rz));
@@ -1126,7 +1123,7 @@
           };
           [[rotXRange, rotX, true, 0, 0], [rotYRange, rotY, true, 0, 0], [rotZRange, rotZ, true, 0, 0], [posXRange, posX, false, posXMin, posXMax], [posYRange, posY, false, posYMin, posYMax], [posZRange, posZ, false, posZMin, posZMax]].forEach(([rangeEl, numEl, isRot, pMin, pMax]) => {
             rangeEl.addEventListener("input", () => syncRangeToNum(rangeEl, numEl, isRot));
-            numEl.addEventListener("input", () => syncNumToRange(numEl, rangeEl, isRot, pMin, pMax));
+            // 数字输入框只在失焦/回车时生效，避免输入过程中被立即重写
             numEl.addEventListener("change", () => syncNumToRange(numEl, rangeEl, isRot, pMin, pMax));
           });
           listEl.appendChild(block);
@@ -1195,66 +1192,16 @@
             });
           }
 
-          // 计算模型边界并居中
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-
-          // 将模型居中
-          model.position.sub(center);
+          // 将模型按原始坐标加入场景（不再做居中、缩放或自动相机对齐）
           scene.add(model);
 
-          // 将地面平台移到模型正下方，便于接收阴影
-          groundPlaneMesh.position.y = -size.y / 2 - 0.05;
-
-          // 同步地面网格位置
-          groundGridHelper.position.copy(groundPlaneMesh.position);
-
-          // 模型三轴辅助：根据面板开关决定是否显示
-          if (modelAxesHelper) {
-            model.remove(modelAxesHelper);
-            modelAxesHelper = null;
-          }
-          const axesCheck = document.getElementById("modelAxesEnabled");
-          if (axesCheck && axesCheck.checked) {
-            modelAxesHelper = new THREE.AxesHelper(Math.max(size.x, size.y, size.z) * 0.8);
-            model.add(modelAxesHelper);
-          }
-
-          // 同步场景面板中的模型位置输入框为 0,0,0
+          // 同步场景面板中的模型位置输入框为当前模型 position
           const mpX = document.getElementById("modelPosX");
           const mpY = document.getElementById("modelPosY");
           const mpZ = document.getElementById("modelPosZ");
-          if (mpX) mpX.value = "0";
-          if (mpY) mpY.value = "0";
-          if (mpZ) mpZ.value = "0";
-
-          // 计算相机距离
-          const fov = camera.fov * (Math.PI / 180);
-          // 根据模型高度计算距离
-          const distance = Math.abs(size.y / 2 / Math.tan(fov / 2));
-          
-          // 设置相机位置
-          const angle = Math.PI / 6;
-          camera.position.set(
-            distance * Math.sin(angle),
-            distance * Math.cos(angle) * 0.3,
-            distance * Math.cos(angle)
-          );
-          camera.lookAt(0, 0, 0);
-          
-          // 更新控制器目标为模型中心
-          controls.target.set(0, 0, 0);
-          controls.update();
-
-          // 调整相机和控制器以适应模型
-          const maxDim = Math.max(size.x, size.y, size.z);
-          controls.maxDistance = maxDim * 3;
-          controls.minDistance = maxDim * 0.01; 
-          // 设置更小的 near 值，允许相机更靠近模型而不被裁剪
-          camera.near = Math.max(maxDim / 1000, 0.001);
-          camera.far = maxDim * 20;
-          camera.updateProjectionMatrix();
+          if (mpX) mpX.value = model.position.x.toFixed(3);
+          if (mpY) mpY.value = model.position.y.toFixed(3);
+          if (mpZ) mpZ.value = model.position.z.toFixed(3);
           
           // 打印所有mesh
           const allMeshes = [];
