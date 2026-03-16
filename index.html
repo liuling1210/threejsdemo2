@@ -154,7 +154,7 @@
       #uploadButton {
         position: absolute;
         top: 70px;
-        right: 20px;
+        right: 140px;
         z-index: 100;
         padding: 10px 20px;
         font-size: 14px;
@@ -164,6 +164,30 @@
         cursor: pointer;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         transition: all 0.2s;
+      }
+
+      #clearModelsButton {
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        z-index: 100;
+        padding: 10px 12px;
+        font-size: 12px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s;
+      }
+
+      #clearModelsButton:hover {
+        background-color: #f0f0f0;
+        border-color: #666;
+      }
+
+      #clearModelsButton:active {
+        background-color: #e0e0e0;
       }
 
       #uploadButton:hover {
@@ -449,6 +473,7 @@
     </div>
 
     <button id="uploadButton">上传GLB模型</button>
+    <button id="clearModelsButton" style="margin-left:8px;">清空所有模型</button>
     <input type="file" id="fileInput" accept=".glb,.gltf" />
 
     <div id="rightPanelsContainer">
@@ -546,13 +571,13 @@
       renderer.shadowMap.enabled = false;
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xcccccc);
 
       const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(1.5, 1.5, 3);
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
+      controls.enableZoom = false; // 关闭默认缩放逻辑，改用调整 fov
       controls.target.set(0, 1, 0);
 
       // 添加环境光
@@ -588,24 +613,9 @@
       scene.add(spotLight);
       scene.add(spotLight.target); // 需要将target添加到场景中
 
-      // 地面平台：用于接收模型投射的阴影
-      const groundGeometry = new THREE.PlaneGeometry(20, 20);
-      const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x888888,
-        roughness: 0.8,
-        metalness: 0.2
-      });
-      const groundPlaneMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-      groundPlaneMesh.rotation.x = -Math.PI / 2; // 水平放置（XZ 平面）
-      groundPlaneMesh.position.set(0, -2, 0);
-      groundPlaneMesh.receiveShadow = true;
-      scene.add(groundPlaneMesh);
-
-      // 地面网格（GridHelper 默认在 XZ 平面，不旋转；与地面平台二选一显示）
-      const groundGridHelper = new THREE.GridHelper(20, 20, 0x666666, 0x888888);
-      groundGridHelper.position.set(0, -2, 0);
-      groundGridHelper.visible = false;
-      scene.add(groundGridHelper);
+      // （已去除真实地面平台和网格，仅保留变量占位，避免其他逻辑引用时报错）
+      const groundPlaneMesh = { visible: false, material: { color: { setStyle() {} } }, scale: { set() {} } };
+      const groundGridHelper = { visible: false, scale: { set() {} }, position: { copy() {} } };
 
       let modelAxesHelper = null; // 模型三轴辅助，加载模型时创建
 
@@ -617,9 +627,20 @@
       dirLight.shadow.camera.near = 0.5;
       dirLight.shadow.camera.far = 50;
 
+      // 天空球：用于显示全景背景纹理，始终包裹在场景外部
+      const skySphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+      const skySphereMaterial = new THREE.MeshBasicMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        color: 0xffffff,
+        map: null
+      });
+      const skySphere = new THREE.Mesh(skySphereGeometry, skySphereMaterial);
+      skySphere.scale.setScalar(50);
+      scene.add(skySphere);
+
       // 环境贴图相关变量
       let envMap = null; // 存储生成的环境贴图
-      let envMapBackgroundTexture = null; // 用于 scene.background 的等距柱状图，关闭环境贴图时需 dispose
       let cubeCamera = null; // CubeCamera 实例
       let useImageEnvMap = false; // 是否使用图片环境贴图（为 true 时不使用 CubeCamera 覆盖）
       const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -642,11 +663,6 @@
             texture.mapping = THREE.EquirectangularReflectionMapping;
             texture.colorSpace = THREE.SRGBColorSpace;
             const cubeEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
-            // 清理旧的背景贴图
-            if (envMapBackgroundTexture) {
-              envMapBackgroundTexture.dispose();
-              envMapBackgroundTexture = null;
-            }
             // 清理旧的环境贴图
             if (envMap) {
               envMap.dispose();
@@ -659,8 +675,9 @@
             }
             envMap = cubeEnvMap;
             scene.environment = envMap;
-            scene.background = texture;
-            envMapBackgroundTexture = texture;
+            // 使用同一张等距柱状纹理作为天空球背景
+            skySphereMaterial.map = texture;
+            skySphereMaterial.needsUpdate = true;
             useImageEnvMap = true;
             const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
             const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
@@ -706,10 +723,6 @@
             texture.mapping = THREE.EquirectangularReflectionMapping;
             texture.colorSpace = THREE.SRGBColorSpace;
             const cubeEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
-            if (envMapBackgroundTexture) {
-              envMapBackgroundTexture.dispose();
-              envMapBackgroundTexture = null;
-            }
             if (envMap) {
               envMap.dispose();
               envMap = null;
@@ -721,8 +734,8 @@
             }
             envMap = cubeEnvMap;
             scene.environment = envMap;
-            scene.background = texture;
-            envMapBackgroundTexture = texture;
+            skySphereMaterial.map = texture;
+            skySphereMaterial.needsUpdate = true;
             useImageEnvMap = true;
             const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
             const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
@@ -765,14 +778,11 @@
           envMap.dispose();
           envMap = null;
         }
-        if (envMapBackgroundTexture) {
-          envMapBackgroundTexture.dispose();
-          envMapBackgroundTexture = null;
-        }
         scene.environment = null;
-        const bgColorEl = document.getElementById("sceneBgColor");
-        if (bgColorEl) scene.background.setStyle(bgColorEl.value);
-        else scene.background = new THREE.Color(0xcccccc);
+        // 清空天空球贴图，使用纯色材质作为背景
+        skySphereMaterial.map = null;
+        skySphereMaterial.color.set(0x444444);
+        skySphereMaterial.needsUpdate = true;
         if (modelRef) {
           modelRef.traverse((child) => {
             if (child.isMesh && child.material) {
@@ -901,6 +911,7 @@
 
       // 存储模型引用和当前高亮的mesh
       let modelRef = null;
+      const loadedModels = [];
       let lastModelFileSize = null; // 最近一次加载的模型文件大小（字节），URL 加载时为 null
       let highlightedMeshes = [];
       let highlightedLines = []; // 存储重新绘制的粗线
@@ -908,22 +919,20 @@
 
       // 移除旧模型
       function removeOldModel() {
-        if (modelRef) {
-          // 清除所有高亮
-          restoreHighlightedMeshes();
-          
+        if (!loadedModels.length) return;
+        // 清除所有高亮
+        restoreHighlightedMeshes();
+        loadedModels.forEach((model) => {
           // 移除并释放模型三轴辅助
-          if (modelAxesHelper) {
-            modelRef.remove(modelAxesHelper);
-            modelAxesHelper.geometry.dispose();
+          if (modelAxesHelper && model === modelRef) {
+            model.remove(modelAxesHelper);
+            modelAxesHelper.geometry && modelAxesHelper.geometry.dispose();
             modelAxesHelper = null;
           }
-          
-          // 从场景中移除旧模型
-          scene.remove(modelRef);
-          
+          // 从场景中移除
+          scene.remove(model);
           // 清理模型资源
-          modelRef.traverse((child) => {
+          model.traverse((child) => {
             if (child.isMesh) {
               if (child.geometry) child.geometry.dispose();
               if (child.material) {
@@ -935,11 +944,11 @@
               }
             }
           });
-
-          modelRef = null;
-          modelAxesHelper = null;
-          buildJointPanel(null);
-        }
+        });
+        loadedModels.length = 0;
+        modelRef = null;
+        modelAxesHelper = null;
+        buildJointPanel(null);
       }
 
       // 递归遍历模型节点，按树状结构打印 name / type / uuid / position / rotation（带缩进）
@@ -955,14 +964,6 @@
         const parentInfo = node.parent
           ? (" | parent.name: " + (node.parent.name && node.parent.name.trim() !== "" ? node.parent.name : "(未命名)") + " | parent.uuid: " + node.parent.uuid)
           : " | parent: (无)";
-        console.log(
-          indent + branch + name +
-          " | type: " + node.type +
-          " | uuid: " + node.uuid +
-          parentInfo +
-          " | position: (" + pos.x.toFixed(3) + ", " + pos.y.toFixed(3) + ", " + pos.z.toFixed(3) + ")" +
-          " | rotation°: (" + rotDeg.x + ", " + rotDeg.y + ", " + rotDeg.z + ")"
-        );
         const children = node.children || [];
         const nextIndent = indent + (isLast ? "   " : "│  ");
         for (let i = 0; i < children.length; i++) {
@@ -1006,8 +1007,6 @@
           rotationDeg: { x: Number(radToDeg(n.rotation.x).toFixed(2)), y: Number(radToDeg(n.rotation.y).toFixed(2)), z: Number(radToDeg(n.rotation.z).toFixed(2)) },
           childrenCount: n.children ? n.children.length : 0
         }));
-        console.log("关节节点列表 (" + allNodes.length + " 个):", nodeInfos);
-        console.log("========== 模型节点树（父子层级） ==========");
         printSceneTree(model, "");
         if (emptyEl) emptyEl.style.display = "none";
         const degToRad = (d) => (d * Math.PI) / 180;
@@ -1144,6 +1143,7 @@
         const onLoad = (gltf) => {
           const model = gltf.scene;
           modelRef = model;
+          loadedModels.push(model);
           
           // 设置阴影和环境贴图
           model.traverse((child) => {
@@ -1230,7 +1230,6 @@
               });
             }
           });
-          console.log(allMeshes);
           
           // 自动生成环境贴图（仅当未使用图片环境贴图时）
           setTimeout(() => {
@@ -1249,7 +1248,6 @@
 
         const onProgress = (progress) => {
           const percent = (progress.loaded / progress.total) * 100;
-          console.log(`加载进度: ${percent.toFixed(2)}%`);
         };
 
         const onError = (error) => {
@@ -1327,6 +1325,16 @@
       };
 
       window.addEventListener("resize", resize);
+      // 使用鼠标滚轮通过调整相机 fov 来缩放视图，而不是改变相机与目标的距离
+      window.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const delta = event.deltaY || event.wheelDelta || 0;
+        const zoomSpeed = 0.1;
+        let fov = camera.fov + (delta > 0 ? zoomSpeed : -zoomSpeed);
+        fov = Math.min(80, Math.max(20, fov));
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }, { passive: false });
 
       // 动画循环
       const animate = () => {
@@ -1342,6 +1350,8 @@
         updateModelInfoPanel();
 
         controls.update();
+        // 天空球始终跟随观察目标位置，保持一个固定的大尺度，看起来像环境随视野缩放
+        skySphere.position.copy(controls.target);
         
         // 更新流动效果 - 从起点向终点流动
         flowEffects.forEach((effect) => {
@@ -1599,12 +1609,20 @@
 
       // 文件上传相关事件监听
       const uploadButton = document.getElementById("uploadButton");
+      const clearModelsButton = document.getElementById("clearModelsButton");
       const fileInput = document.getElementById("fileInput");
       
       // 点击上传按钮时触发文件选择
       uploadButton.addEventListener("click", () => {
         fileInput.click();
       });
+
+      // 一键清空所有已加载模型
+      if (clearModelsButton) {
+        clearModelsButton.addEventListener("click", () => {
+          removeOldModel();
+        });
+      }
       
       // 文件选择变化时加载新模型
       fileInput.addEventListener("change", (event) => {
@@ -1616,10 +1634,6 @@
             fileInput.value = "";
             return;
           }
-          
-          // 移除旧模型
-          removeOldModel();
-          
           lastModelFileSize = file.size;
           // 加载新模型
           loadModel(file);
