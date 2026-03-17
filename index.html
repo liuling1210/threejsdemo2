@@ -612,6 +612,10 @@
           <label>mesh前缀</label>
           <input type="text" id="liquidPrefix" placeholder="aspirator_tubularis_s_liquid" style="flex:1; min-width: 60px; font-size:12px; padding:3px 4px;" />
         </div>
+        <div class="pbr-param-row">
+          <label>吸管显示</label>
+          <button type="button" id="toggleStrawButton" style="flex:1; padding:4px 6px; font-size:12px; cursor:pointer;">隐藏吸管</button>
+        </div>
       </div>
     </div>
 
@@ -738,6 +742,10 @@
       const liquidPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); // 法线向下，配合从上往下裁剪
       const liquidMeshes = [];
       let liquidLevel = 0.5; // 0~1，业务层可通过 window.setLiquidLevel 调整
+
+      // 吸管 mesh（aspirator_tubularis_s_single_ 前缀），用于一键隐藏/显示
+      const STRAW_NAME_PREFIX = "aspirator_tubularis_s_single_";
+      const strawMeshes = [];
 
       const LIQUID_MATERIAL_OPTIONS = {
         // 调试用：纯红色，方便观察是否渲染出来
@@ -1364,6 +1372,11 @@
                 mat.needsUpdate = true;
               });
             }
+            // 收集吸管 mesh，名称以 STRAW_NAME_PREFIX 开头
+            if (child.isMesh && child.name && String(child.name).startsWith(STRAW_NAME_PREFIX)) {
+              console.log("[straw] collect straw mesh:", child.name);
+              strawMeshes.push(child);
+            }
           });
 
           // 透明材质修正：仅当「开启透明度渲染」勾选时应用
@@ -1951,6 +1964,7 @@
       const liquidLevelSlider = document.getElementById("liquidLevel");
       const liquidLevelValue = document.getElementById("liquidLevelValue");
       const liquidPrefixInput = document.getElementById("liquidPrefix");
+      const toggleStrawButton = document.getElementById("toggleStrawButton");
       if (liquidLevelSlider && liquidLevelValue) {
         const syncLiquidFromSlider = (v) => {
           const t = Math.max(0, Math.min(1, parseFloat(v) || 0));
@@ -1972,6 +1986,19 @@
         liquidPrefixInput.addEventListener("change", (e) => {
           const val = String(e.target.value || "").trim();
           if (window.setLiquidPrefix) window.setLiquidPrefix(val);
+        });
+      }
+
+      // 吸管显示/隐藏按钮
+      if (toggleStrawButton) {
+        let strawVisible = true;
+        toggleStrawButton.addEventListener("click", () => {
+          strawVisible = !strawVisible;
+          strawMeshes.forEach((mesh) => {
+            if (mesh && mesh.isMesh) mesh.visible = strawVisible;
+          });
+          toggleStrawButton.textContent = strawVisible ? "隐藏吸管" : "显示吸管";
+          console.log("[straw] toggle visibility =>", strawVisible, "count =", strawMeshes.length);
         });
       }
 
