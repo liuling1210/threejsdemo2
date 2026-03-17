@@ -639,7 +639,7 @@
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.enableZoom = false; // 关闭默认缩放逻辑，改用调整 fov
+      controls.enableZoom = true; // 恢复 OrbitControls 默认缩放逻辑
       controls.target.set(0, 1, 0);
 
       // 添加环境光
@@ -1387,16 +1387,6 @@
       };
 
       window.addEventListener("resize", resize);
-      // 使用鼠标滚轮通过调整相机 fov 来缩放视图，而不是改变相机与目标的距离
-      window.addEventListener("wheel", (event) => {
-        event.preventDefault();
-        const delta = event.deltaY || event.wheelDelta || 0;
-        const zoomSpeed = 0.1;
-        let fov = camera.fov + (delta > 0 ? zoomSpeed : -zoomSpeed);
-        fov = Math.min(80, Math.max(20, fov));
-        camera.fov = fov;
-        camera.updateProjectionMatrix();
-      }, { passive: false });
 
       // 动画循环
       const animate = () => {
