@@ -52,7 +52,6 @@
       }
 
       #leftLightingPanel .lighting-control-group input[type="range"] {
-        width: 100%;
         margin-bottom: 5px;
       }
 
@@ -62,6 +61,29 @@
         font-size: 12px;
         border: 1px solid #ccc;
         border-radius: 3px;
+      }
+
+      #leftLightingPanel .lighting-param-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      #leftLightingPanel .lighting-param-row label {
+        margin-bottom: 0;
+        min-width: 56px;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      #leftLightingPanel .lighting-param-row input[type="range"] {
+        max-width: 100px;
+        min-width: 60px;
+        margin: 0;
+        flex: 1;
+      }
+      #leftLightingPanel .lighting-param-row input[type="number"] {
+        width: 52px;
+        flex-shrink: 0;
       }
 
       #leftLightingPanel .lighting-control-row {
@@ -229,15 +251,43 @@
       #rightPbrPanel .pbr-group {
         margin-bottom: 12px;
       }
-      #rightPbrPanel .pbr-group label {
+      #rightPbrPanel .pbr-group > label:first-child {
         display: block;
         font-size: 12px;
         font-weight: bold;
         color: #333;
         margin-bottom: 4px;
       }
-      #rightPbrPanel .pbr-group input[type="range"] {
+      /* 一个参数一行：标签 + 滑块(缩小宽度) + 数值 */
+      #rightPbrPanel .pbr-param-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      #rightPbrPanel .pbr-param-row label {
+        margin-bottom: 0;
+        min-width: 56px;
+        font-size: 12px;
+        color: #333;
+        flex-shrink: 0;
+      }
+      #rightPbrPanel .pbr-param-row input[type="range"] {
         width: 100%;
+        max-width: 100px;
+        min-width: 60px;
+        margin: 0;
+        flex-shrink: 1;
+      }
+      #rightPbrPanel .pbr-param-row input[type="number"] {
+        width: 52px;
+        padding: 4px;
+        font-size: 12px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      #rightPbrPanel .pbr-group input[type="range"] {
         margin-bottom: 2px;
       }
       #rightPbrPanel .pbr-group input[type="number"] {
@@ -334,6 +384,7 @@
       #jointPanel .joint-row input[type="range"] {
         flex: 1;
         min-width: 60px;
+        max-width: 100px;
         margin: 0 4px 0 0;
       }
       #jointPanel .joint-row input[type="number"] {
@@ -386,19 +437,17 @@
       <h3>光照系统</h3>
 
       <div class="lighting-control-group">
-        <label>环境光强度</label>
-        <input type="range" id="leftHemiIntensity" min="0" max="2" step="0.1" value="1.0" />
-        <div class="lighting-control-row">
-          <label>值:</label>
+        <div class="lighting-param-row">
+          <label>环境光强度</label>
+          <input type="range" id="leftHemiIntensity" min="0" max="2" step="0.1" value="1.0" />
           <input type="number" id="leftHemiIntensityValue" min="0" max="2" step="0.1" value="1.0" />
         </div>
       </div>
 
       <div class="lighting-control-group">
-        <label>主光源平行光 · 强度</label>
-        <input type="range" id="leftDirIntensity" min="0" max="3" step="0.1" value="1.5" />
-        <div class="lighting-control-row">
-          <label>值:</label>
+        <div class="lighting-param-row">
+          <label>平行光强度</label>
+          <input type="range" id="leftDirIntensity" min="0" max="3" step="0.1" value="1.5" />
           <input type="number" id="leftDirIntensityValue" min="0" max="3" step="0.1" value="1.5" />
         </div>
         <label style="margin-top: 8px;">位置</label>
@@ -480,18 +529,16 @@
     <div id="rightPbrPanel">
       <h3>PBR 渲染</h3>
       <div class="pbr-group">
-        <label>金属度 (metalness)</label>
-        <input type="range" id="pbrMetalness" min="0" max="1" step="0.01" value="0" />
-        <div class="pbr-row">
-          <label>值:</label>
+        <div class="pbr-param-row">
+          <label>金属度</label>
+          <input type="range" id="pbrMetalness" min="0" max="1" step="0.01" value="0" />
           <input type="number" id="pbrMetalnessValue" min="0" max="1" step="0.01" value="0" />
         </div>
       </div>
       <div class="pbr-group">
-        <label>粗糙度 (roughness)</label>
-        <input type="range" id="pbrRoughness" min="0" max="1" step="0.01" value="0.5" />
-        <div class="pbr-row">
-          <label>值:</label>
+        <div class="pbr-param-row">
+          <label>粗糙度</label>
+          <input type="range" id="pbrRoughness" min="0" max="1" step="0.01" value="0.5" />
           <input type="number" id="pbrRoughnessValue" min="0" max="1" step="0.01" value="0.5" />
         </div>
       </div>
@@ -501,16 +548,33 @@
           启用环境贴图
         </label>
         <div id="imageEnvMapParams" style="margin-top:8px;">
-          <label>环境贴图强度</label>
-          <input type="range" id="pbrEnvMapIntensity" min="0" max="2" step="0.05" value="1" />
-          <div class="pbr-row">
-            <label>值:</label>
+          <div class="pbr-param-row">
+            <label>贴图强度</label>
+            <input type="range" id="pbrEnvMapIntensity" min="0" max="2" step="0.05" value="1" />
             <input type="number" id="pbrEnvMapIntensityValue" min="0" max="2" step="0.05" value="1" />
           </div>
           <div style="margin-top:8px;">
             <button type="button" id="uploadEnvMapButton" style="width:100%; padding:6px; font-size:12px; cursor:pointer; border:1px solid #ccc; border-radius:4px; background:#f5f5f5;">上传本地环境贴图</button>
             <input type="file" id="envMapFileInput" accept="image/*" style="display:none;" />
           </div>
+        </div>
+      </div>
+      <div class="pbr-group">
+        <label>天空球旋转</label>
+        <div class="pbr-param-row">
+          <label>左右(°)</label>
+          <input type="range" id="skySphereRotY" min="-180" max="180" step="1" value="0" />
+          <input type="number" id="skySphereRotYValue" min="-180" max="180" step="1" value="0" />
+        </div>
+        <div class="pbr-param-row">
+          <label>上下(°)</label>
+          <input type="range" id="skySphereRotX" min="-180" max="180" step="1" value="0" />
+          <input type="number" id="skySphereRotXValue" min="-180" max="180" step="1" value="0" />
+        </div>
+        <div class="pbr-param-row">
+          <label>半径</label>
+          <input type="range" id="skySphereRadius" min="10" max="200" step="1" value="50" />
+          <input type="number" id="skySphereRadiusValue" min="10" max="200" step="1" value="50" />
         </div>
       </div>
       <div class="pbr-group" style="margin-top:12px;">
@@ -525,16 +589,14 @@
           开启透明度渲染
         </label>
         <div id="pbrTransparencyControls" style="display:none; margin-top:8px;">
-          <label>透明度 (opacity)</label>
-          <input type="range" id="pbrOpacity" min="0" max="1" step="0.01" value="0.8" />
-          <div class="pbr-row">
-            <label>值:</label>
+          <div class="pbr-param-row">
+            <label>透明度</label>
+            <input type="range" id="pbrOpacity" min="0" max="1" step="0.01" value="0.8" />
             <input type="number" id="pbrOpacityValue" min="0" max="1" step="0.01" value="0.8" />
           </div>
-          <label>Alpha 测试 (alphaTest)</label>
-          <input type="range" id="pbrAlphaTest" min="0" max="1" step="0.01" value="0" />
-          <div class="pbr-row">
-            <label>值:</label>
+          <div class="pbr-param-row">
+            <label>AlphaTest</label>
+            <input type="range" id="pbrAlphaTest" min="0" max="1" step="0.01" value="0" />
             <input type="number" id="pbrAlphaTestValue" min="0" max="1" step="0.01" value="0" />
           </div>
         </div>
@@ -1756,6 +1818,74 @@
         syncPbrFromPanel();
       });
       pbrEnvMapIntensityValue.addEventListener("input", () => syncPbrFromPanel());
+
+      // 天空球旋转：左右(Y)、上下(X)，单位度，转弧度后赋给 skySphere.rotation
+      const skySphereRotY = document.getElementById("skySphereRotY");
+      const skySphereRotYValue = document.getElementById("skySphereRotYValue");
+      const skySphereRotX = document.getElementById("skySphereRotX");
+      const skySphereRotXValue = document.getElementById("skySphereRotXValue");
+      const skySphereRadius = document.getElementById("skySphereRadius");
+      const skySphereRadiusValue = document.getElementById("skySphereRadiusValue");
+      const degToRadSky = (d) => (d * Math.PI) / 180;
+      function applySkySphereRotation() {
+        const y = parseFloat(skySphereRotYValue.value) || 0;
+        const x = parseFloat(skySphereRotXValue.value) || 0;
+        skySphere.rotation.y = degToRadSky(y);
+        skySphere.rotation.x = degToRadSky(x);
+      }
+      if (skySphereRotY && skySphereRotYValue) {
+        skySphereRotY.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value) || 0;
+          skySphereRotYValue.value = v;
+          applySkySphereRotation();
+        });
+        skySphereRotYValue.addEventListener("input", () => {
+          const v = Math.max(-180, Math.min(180, parseFloat(skySphereRotYValue.value) || 0));
+          skySphereRotY.value = v;
+          skySphereRotYValue.value = v;
+          applySkySphereRotation();
+        });
+      }
+      if (skySphereRotX && skySphereRotXValue) {
+        skySphereRotX.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value) || 0;
+          skySphereRotXValue.value = v;
+          applySkySphereRotation();
+        });
+        skySphereRotXValue.addEventListener("input", () => {
+          const v = Math.max(-180, Math.min(180, parseFloat(skySphereRotXValue.value) || 0));
+          skySphereRotX.value = v;
+          skySphereRotXValue.value = v;
+          applySkySphereRotation();
+        });
+      }
+      function applySkySphereRadius() {
+        const r = parseFloat(skySphereRadiusValue.value);
+        if (Number.isFinite(r) && r > 0) {
+          const v = Math.max(10, Math.min(200, r));
+          skySphere.scale.setScalar(v);
+          if (skySphereRadius) skySphereRadius.value = v;
+          skySphereRadiusValue.value = v;
+        }
+      }
+      if (skySphereRadius && skySphereRadiusValue) {
+        skySphereRadius.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value) || 50;
+          skySphereRadiusValue.value = v;
+          skySphere.scale.setScalar(v);
+        });
+        skySphereRadiusValue.addEventListener("input", () => applySkySphereRadius());
+        const r0 = Math.round(skySphere.scale.x);
+        skySphereRadius.value = r0;
+        skySphereRadiusValue.value = r0;
+      }
+      const radToDegSky = (r) => (r * 180) / Math.PI;
+      if (skySphereRotY && skySphereRotYValue && skySphereRotX && skySphereRotXValue) {
+        const y0 = Math.round(radToDegSky(skySphere.rotation.y));
+        const x0 = Math.round(radToDegSky(skySphere.rotation.x));
+        [skySphereRotY, skySphereRotYValue].forEach((el) => { el.value = y0; });
+        [skySphereRotX, skySphereRotXValue].forEach((el) => { el.value = x0; });
+      }
 
       const pbrEnvEnabled = document.getElementById("pbrEnvEnabled");
       const pbrTransparencyEnabled = document.getElementById("pbrTransparencyEnabled");
