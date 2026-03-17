@@ -601,6 +601,18 @@
           </div>
         </div>
       </div>
+      <div class="pbr-group" style="margin-top:12px;">
+        <label>液体效果</label>
+        <div class="pbr-param-row">
+          <label>液位</label>
+          <input type="range" id="liquidLevel" min="0" max="1" step="0.01" value="0.5" />
+          <input type="number" id="liquidLevelValue" min="0" max="1" step="0.01" value="0.5" />
+        </div>
+        <div class="pbr-param-row">
+          <label>mesh前缀</label>
+          <input type="text" id="liquidPrefix" placeholder="aspirator_tubularis_s_liquid" style="flex:1; min-width: 60px; font-size:12px; padding:3px 4px;" />
+        </div>
+      </div>
     </div>
 
     <div id="jointPanel">
@@ -631,6 +643,10 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.shadowMap.enabled = false;
+      renderer.localClippingEnabled = true;
+      renderer.physicallyCorrectLights = true;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
 
       const scene = new THREE.Scene();
 
@@ -715,6 +731,106 @@
         if (!isTransparent) return baseIntensity;
         return baseIntensity / Math.max(0.01, opacity);
       }
+
+      // 液体裁剪相关：统一前缀命名的液体 mesh + Plane 裁剪
+      // 当前 GLB 中液注 mesh 以 "aspirator_tubularis_s_liquid" 开头
+      let LIQUID_NAME_PREFIX = "aspirator_tubularis_s_liquid";
+      const liquidPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0); // 法线向下，配合从上往下裁剪
+      const liquidMeshes = [];
+      let liquidLevel = 0.5; // 0~1，业务层可通过 window.setLiquidLevel 调整
+
+      const LIQUID_MATERIAL_OPTIONS = {
+        // 调试用：纯红色，方便观察是否渲染出来
+        color: 0xff0000,
+        transparent: true,
+        opacity: 1.0,
+        transmission: 0.96,
+        thickness: 0.4,
+        ior: 1.33,
+        attenuationColor: new THREE.Color(0xff0000),
+        attenuationDistance: 0.85,
+        roughness: 0.04,
+        metalness: 0.0,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.3,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      };
+
+      // 对单个模型挂载液体材质与更新函数
+      function setupLiquidForModel(root) {
+        console.log("[liquid] setupLiquidForModel for root:", root && root.name);
+        let liquidMaterial = null;
+        root.traverse((child) => {
+          if (!child.isMesh || !child.name || typeof child.name !== "string") return;
+          if (!child.name.startsWith(LIQUID_NAME_PREFIX)) return;
+
+          console.log("[liquid] matched liquid mesh:", child.name);
+
+          // 懒创建一个共享的 MeshPhysicalMaterial，PBR 友好
+          if (!liquidMaterial) {
+            liquidMaterial = new THREE.MeshPhysicalMaterial({
+              ...LIQUID_MATERIAL_OPTIONS,
+              envMap: envMap || null,
+              envMapIntensity: 1.0,
+              clippingPlanes: [liquidPlane],
+              clipShadows: false
+            });
+            liquidMaterial.needsUpdate = true;
+          }
+
+          child.material = liquidMaterial;
+          child.userData.isLiquid = true;
+
+          // 为每个 mesh 挂上 updateLiquid(level) 函数：根据世界包围盒更新裁剪平面高度
+          const bbox = new THREE.Box3();
+          const planeNormal = new THREE.Vector3(0, -1, 0); // 液面法线向下
+          const planePoint = new THREE.Vector3();
+          child.updateLiquid = (level) => {
+            const t = THREE.MathUtils.clamp(level ?? 0.5, 0, 1);
+            bbox.setFromObject(child);
+            const minY = bbox.min.y;
+            const maxY = bbox.max.y;
+            if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY <= minY) return;
+            // 按“从上往下裁剪”的约定计算液面高度
+            const y = maxY - t * (maxY - minY);
+            planePoint.set(0, y, 0);
+            liquidPlane.setFromNormalAndCoplanarPoint(planeNormal, planePoint);
+          };
+
+          liquidMeshes.push(child);
+        });
+      }
+
+      // 每帧根据 liquidLevel 更新所有液体 mesh 的裁剪平面
+      function updateLiquidClip() {
+        if (!liquidMeshes.length) {
+          // 没有任何液体 mesh，提示一次
+          // 注意：可能是命名前缀不匹配
+          // console.warn 会在控制台显示，但不会影响渲染
+          console.warn("[liquid] no liquidMeshes found, check LIQUID_NAME_PREFIX and GLB mesh names.");
+          return;
+        }
+        const level = THREE.MathUtils.clamp(liquidLevel, 0, 1);
+        liquidMeshes.forEach((mesh) => {
+          if (typeof mesh.updateLiquid === "function") {
+            // 按另一项目的约定：内部用 1 - level
+            mesh.updateLiquid(1 - level);
+          }
+        });
+      }
+
+      // 暴露一个简单的全局接口给业务侧调整液位（0~1）
+      window.setLiquidLevel = (v) => {
+        const parsed = Number(v);
+        liquidLevel = THREE.MathUtils.clamp(Number.isFinite(parsed) ? parsed : 0, 0, 1);
+        console.log("[liquid] setLiquidLevel =>", liquidLevel);
+      };
+      window.setLiquidPrefix = (prefix) => {
+        const p = String(prefix || "").trim();
+        LIQUID_NAME_PREFIX = p || "aspirator_tubularis_s_liquid";
+        console.log("[liquid] setLiquidPrefix =>", LIQUID_NAME_PREFIX);
+      };
 
       // 加载 huanjingtietu.png 作为场景环境贴图（全景图转立方体贴图）
       function loadImageEnvironmentMap() {
@@ -1234,6 +1350,22 @@
             }
           });
 
+          // 1) 所有名称中包含 "liquid" 的 mesh，先统一设为完全透明，避免原始液体网格干扰
+          model.traverse((child) => {
+            if (!child.isMesh || !child.name) return;
+            if (String(child.name).toLowerCase().includes("liquid") && child.material) {
+              console.log("[liquid] hide original liquid mesh:", child.name);
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((mat) => {
+                if (!mat) return;
+                mat.transparent = true;
+                mat.opacity = 0.0;
+                mat.depthWrite = false;
+                mat.needsUpdate = true;
+              });
+            }
+          });
+
           // 透明材质修正：仅当「开启透明度渲染」勾选时应用
           const transparencyCheck = document.getElementById("pbrTransparencyEnabled");
           if (transparencyCheck && transparencyCheck.checked) {
@@ -1258,6 +1390,9 @@
 
           // 将模型按原始坐标加入场景（不再做居中、缩放或自动相机对齐）
           scene.add(model);
+
+          // 为当前模型中命名为 aspirator_tubularis_liquid_xxx 的 mesh 挂载液体裁剪效果
+          setupLiquidForModel(model);
 
           // 同步场景面板中的模型位置输入框为当前模型 position
           const mpX = document.getElementById("modelPosX");
@@ -1410,6 +1545,9 @@
           // 负值表示从起点向终点流动
           effect.texture.offset.x -= 0.01 * effect.speed;
         });
+
+         // 更新液体裁剪平面（基于 liquidLevel 以及液体 mesh 的世界包围盒）
+         updateLiquidClip();
         
         renderer.render(scene, camera);
       };
@@ -1808,6 +1946,34 @@
         syncPbrFromPanel();
       });
       pbrEnvMapIntensityValue.addEventListener("input", () => syncPbrFromPanel());
+
+      // 液体效果面板：液位滑块 + mesh 前缀输入
+      const liquidLevelSlider = document.getElementById("liquidLevel");
+      const liquidLevelValue = document.getElementById("liquidLevelValue");
+      const liquidPrefixInput = document.getElementById("liquidPrefix");
+      if (liquidLevelSlider && liquidLevelValue) {
+        const syncLiquidFromSlider = (v) => {
+          const t = Math.max(0, Math.min(1, parseFloat(v) || 0));
+          liquidLevelSlider.value = t.toString();
+          liquidLevelValue.value = t.toFixed(2);
+          if (window.setLiquidLevel) window.setLiquidLevel(t);
+          console.log("[liquid:UI] slider change, level =", t);
+        };
+        liquidLevelSlider.addEventListener("input", (e) => {
+          syncLiquidFromSlider(e.target.value);
+        });
+        liquidLevelValue.addEventListener("input", (e) => {
+          syncLiquidFromSlider(e.target.value);
+        });
+        // 初始化一次
+        syncLiquidFromSlider(liquidLevelSlider.value);
+      }
+      if (liquidPrefixInput) {
+        liquidPrefixInput.addEventListener("change", (e) => {
+          const val = String(e.target.value || "").trim();
+          if (window.setLiquidPrefix) window.setLiquidPrefix(val);
+        });
+      }
 
       // 天空球旋转：左右(Y)、上下(X)，单位度，转弧度后赋给 skySphere.rotation
       const skySphereRotY = document.getElementById("skySphereRotY");
