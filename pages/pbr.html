@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Three.js GLB Loader - ??</title>
-    <link rel="stylesheet" href="./css/common.css" />
+    <title>Three.js GLB Loader - PBR??</title>
+    <link rel="stylesheet" href="../css/common.css" />
     <script type="importmap">
 {
         "imports": {
@@ -14,7 +14,7 @@
       }
     </script>
   </head>
-  <body data-module="all">
+  <body data-module="pbr">
 <canvas id="viewport"></canvas>
 
     <div id="modelInfoPanel">
@@ -114,20 +114,9 @@
     </div>
     </div>
 
-    <button id="uploadButton">上传模型（可多选）</button>
-    <button id="uploadFolderButton">上传文件夹</button>
+    <button id="uploadButton">上传GLB模型</button>
     <button id="clearModelsButton" style="margin-left:8px;">清空所有模型</button>
-    <input type="file" id="fileInput" accept=".glb,.gltf" multiple />
-    <input type="file" id="folderInput" webkitdirectory directory multiple />
-    <div id="modelLoadQueuePanel" class="collapsed">
-      <button id="modelLoadQueueToggle" type="button" aria-expanded="false">
-        <span class="queue-title">加载队列</span>
-        <span id="modelLoadQueueSummary">0/0</span>
-      </button>
-      <div id="modelLoadQueueBody">
-        <div id="modelLoadQueueList"></div>
-      </div>
-    </div>
+    <input type="file" id="fileInput" accept=".glb,.gltf" />
 
     <div id="rightPanelsContainer">
     <div id="rightPbrPanel">
@@ -209,6 +198,6 @@
 
     </div>
 
-    <script type="module" src="./js/main.js"></script>
+    <script type="module" src="../js/main.js"></script>
   </body>
 </html>
