@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { state, getEnvMapIntensityForMaterial } from "./core.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 
-const DEFAULT_MODEL_URL = new URL("../models/xyz_test01.glb", import.meta.url).href;
+const DEFAULT_MODEL_URL = new URL("../models/test02/test_001.gltf", import.meta.url).href;
 
 function setQueueSummary(done, total) {
   const summaryEl = document.getElementById("modelLoadQueueSummary");
@@ -40,6 +40,83 @@ function setQueueItemStatus(statusEl, status, text) {
   if (!statusEl) return;
   statusEl.className = "queue-item-status " + status;
   statusEl.textContent = text;
+}
+
+function normalizePath(path) {
+  return String(path || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .trim();
+}
+
+function getResourceResolver(allFiles, modelFile) {
+  if (!allFiles || !allFiles.length) return null;
+
+  const fileByRelativePath = new Map();
+  const fileListByBaseName = new Map();
+
+  allFiles.forEach((file) => {
+    const rawRel = file.webkitRelativePath && file.webkitRelativePath.length ? file.webkitRelativePath : file.name;
+    const rel = normalizePath(rawRel);
+    fileByRelativePath.set(rel, file);
+
+    const baseName = normalizePath(file.name);
+    if (!fileListByBaseName.has(baseName)) fileListByBaseName.set(baseName, []);
+    fileListByBaseName.get(baseName).push(file);
+  });
+
+  const modelRelRaw =
+    modelFile.webkitRelativePath && modelFile.webkitRelativePath.length ? modelFile.webkitRelativePath : modelFile.name;
+  const modelRel = normalizePath(modelRelRaw);
+  const modelDir = modelRel.includes("/") ? modelRel.slice(0, modelRel.lastIndexOf("/")) : "";
+
+  const tryFindFile = (relativeLikePath) => {
+    const decoded = normalizePath(decodeURIComponent(relativeLikePath || ""));
+    if (!decoded) return null;
+
+    const direct = fileByRelativePath.get(decoded);
+    if (direct) return direct;
+
+    if (modelDir) {
+      const nearPath = normalizePath(modelDir + "/" + decoded);
+      const near = fileByRelativePath.get(nearPath);
+      if (near) return near;
+    }
+
+    const baseName = decoded.includes("/") ? decoded.slice(decoded.lastIndexOf("/") + 1) : decoded;
+    const byName = fileListByBaseName.get(baseName);
+    if (byName && byName.length === 1) return byName[0];
+
+    return null;
+  };
+
+  return (url) => {
+    if (!url) return null;
+    if (/^data:/i.test(url)) return url;
+
+    // 1) Try original URL string as relative path.
+    const matchedFromRaw = tryFindFile(url);
+    if (matchedFromRaw) return URL.createObjectURL(matchedFromRaw);
+
+    // 2) For absolute blob/http URLs, extract pathname for matching fallback.
+    if (/^(blob:|https?:)/i.test(url)) {
+      try {
+        const parsed = new URL(url);
+        const pathLike = normalizePath(parsed.pathname || "");
+        const matchedFromPath = tryFindFile(pathLike);
+        if (matchedFromPath) return URL.createObjectURL(matchedFromPath);
+
+        const baseName = pathLike.includes("/") ? pathLike.slice(pathLike.lastIndexOf("/") + 1) : pathLike;
+        const matchedFromName = tryFindFile(baseName);
+        if (matchedFromName) return URL.createObjectURL(matchedFromName);
+      } catch (error) {
+        void error;
+      }
+    }
+
+    // 3) No match: keep original URL so GLTFLoader can continue default flow.
+    return null;
+  };
 }
 
 function setQueueCollapsed(collapsed) {
@@ -300,9 +377,14 @@ function removeOldModel() {
 
 }
 
-function loadModel(urlOrFile) {
+function loadModel(urlOrFile, options = {}) {
   return new Promise((resolve, reject) => {
-    const loader = new GLTFLoader();
+    const { resolveResourceUrl } = options;
+    const manager = new THREE.LoadingManager();
+    if (typeof resolveResourceUrl === "function") {
+      manager.setURLModifier((url) => resolveResourceUrl(url) || url);
+    }
+    const loader = new GLTFLoader(manager);
 
     const onLoad = (gltf) => {
       const model = gltf.scene;
@@ -429,6 +511,7 @@ export function initModelLoader() {
   setQueueSummary(0, 0);
 
   const runBatchLoad = async (files, sourceLabel, resetInput) => {
+    const allSelectedFiles = files.slice();
     const modelFiles = files.filter((file) => {
       const lower = file.name.toLowerCase();
       return lower.endsWith(".glb") || lower.endsWith(".gltf");
@@ -456,7 +539,8 @@ export function initModelLoader() {
       state.lastModelFileSize = item.file.size;
       setQueueItemStatus(item.statusEl, "loading", "加载中");
       try {
-        await loadModel(item.file);
+        const resolveResourceUrl = getResourceResolver(allSelectedFiles, item.file);
+        await loadModel(item.file, { resolveResourceUrl });
         successCount++;
         setQueueItemStatus(item.statusEl, "success", "成功");
         setQueueSummary(successCount + failedCount, modelFiles.length);
@@ -534,7 +618,6 @@ export function startMainLoop() {
 
     updateModelInfoPanel();
     state.controls.update();
-    state.skySphere.position.copy(state.controls.target);
 
     state.flowEffects.forEach((effect) => {
       effect.texture.offset.x -= 0.01 * effect.speed;

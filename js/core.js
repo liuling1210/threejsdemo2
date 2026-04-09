@@ -55,14 +55,16 @@ export function initCore() {
   state.renderer.toneMappingExposure = 1.0;
 
   state.scene = new THREE.Scene();
+  state.scene.background = new THREE.Color(0xcccccc);
 
   state.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  state.camera.position.set(1.5, 1.5, 3);
+  state.camera.position.set(153.2408832039139, 158.5726587585243, 217.34024277321305);
+  window.camera = state.camera;
 
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping = true;
   state.controls.enableZoom = true;
-  state.controls.target.set(0, 1, 0);
+  state.controls.target.set(0, 0, 0);
 
   // Lights
   state.hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
@@ -116,17 +118,9 @@ export function initCore() {
   state.dirLight.shadow.camera.near = 0.5;
   state.dirLight.shadow.camera.far = 50;
 
-  // Sky sphere (background for env texture).
-  const skySphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-  state.skySphereMaterial = new THREE.MeshBasicMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    color: 0xffffff,
-    map: null
-  });
-  state.skySphere = new THREE.Mesh(skySphereGeometry, state.skySphereMaterial);
-  state.skySphere.scale.setScalar(50);
-  state.scene.add(state.skySphere);
+  // Sky sphere removed.
+  state.skySphereMaterial = null;
+  state.skySphere = null;
 
   // Env mapping variables.
   state.envMap = null;

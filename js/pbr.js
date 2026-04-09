@@ -184,10 +184,6 @@ function clearImageEnvironmentMap() {
   }
   state.scene.environment = null;
 
-  state.skySphereMaterial.map = null;
-  state.skySphereMaterial.color.set(0x444444);
-  state.skySphereMaterial.needsUpdate = true;
-
   if (state.modelRef) {
     state.modelRef.traverse((child) => {
       if (child.isMesh && child.material) {
@@ -228,9 +224,6 @@ function loadImageEnvironmentMap() {
 
       state.envMap = cubeEnvMap;
       state.scene.environment = state.envMap;
-
-      state.skySphereMaterial.map = texture;
-      state.skySphereMaterial.needsUpdate = true;
       state.useImageEnvMap = true;
 
       const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
@@ -292,9 +285,6 @@ function loadEnvironmentMapFromFile(file) {
 
       state.envMap = cubeEnvMap;
       state.scene.environment = state.envMap;
-
-      state.skySphereMaterial.map = texture;
-      state.skySphereMaterial.needsUpdate = true;
       state.useImageEnvMap = true;
 
       const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
@@ -417,83 +407,6 @@ export function initPbrControls() {
     });
   }
   if (pbrAlphaTestValue) pbrAlphaTestValue.addEventListener("input", () => syncTransparencyFromPanel());
-
-  // ---- Sky sphere rotation / radius ----
-  const skySphereRotY = document.getElementById("skySphereRotY");
-  const skySphereRotYValue = document.getElementById("skySphereRotYValue");
-  const skySphereRotX = document.getElementById("skySphereRotX");
-  const skySphereRotXValue = document.getElementById("skySphereRotXValue");
-  const skySphereRadius = document.getElementById("skySphereRadius");
-  const skySphereRadiusValue = document.getElementById("skySphereRadiusValue");
-
-  const degToRadSky = (d) => (d * Math.PI) / 180;
-
-  function applySkySphereRotation() {
-    const y = parseFloat(skySphereRotYValue?.value) || 0;
-    const x = parseFloat(skySphereRotXValue?.value) || 0;
-    state.skySphere.rotation.y = degToRadSky(y);
-    state.skySphere.rotation.x = degToRadSky(x);
-  }
-
-  if (skySphereRotY && skySphereRotYValue) {
-    skySphereRotY.addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value) || 0;
-      skySphereRotYValue.value = v;
-      applySkySphereRotation();
-    });
-    skySphereRotYValue.addEventListener("input", () => {
-      const v = Math.max(-180, Math.min(180, parseFloat(skySphereRotYValue.value) || 0));
-      skySphereRotY.value = v;
-      skySphereRotYValue.value = v;
-      applySkySphereRotation();
-    });
-  }
-
-  if (skySphereRotX && skySphereRotXValue) {
-    skySphereRotX.addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value) || 0;
-      skySphereRotXValue.value = v;
-      applySkySphereRotation();
-    });
-    skySphereRotXValue.addEventListener("input", () => {
-      const v = Math.max(-180, Math.min(180, parseFloat(skySphereRotXValue.value) || 0));
-      skySphereRotX.value = v;
-      skySphereRotXValue.value = v;
-      applySkySphereRotation();
-    });
-  }
-
-  function applySkySphereRadius() {
-    const r = parseFloat(skySphereRadiusValue?.value);
-    if (Number.isFinite(r) && r > 0) {
-      const v = Math.max(10, Math.min(200, r));
-      state.skySphere.scale.setScalar(v);
-      if (skySphereRadius) skySphereRadius.value = v;
-      if (skySphereRadiusValue) skySphereRadiusValue.value = v;
-    }
-  }
-
-  if (skySphereRadius && skySphereRadiusValue) {
-    skySphereRadius.addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value) || 50;
-      skySphereRadiusValue.value = v;
-      state.skySphere.scale.setScalar(v);
-    });
-    skySphereRadiusValue.addEventListener("input", () => applySkySphereRadius());
-    const r0 = Math.round(state.skySphere.scale.x);
-    skySphereRadius.value = r0;
-    skySphereRadiusValue.value = r0;
-  }
-
-  const radToDegSky = (r) => (r * 180) / Math.PI;
-  if (skySphereRotY && skySphereRotYValue && skySphereRotX && skySphereRotXValue) {
-    const y0 = Math.round(radToDegSky(state.skySphere.rotation.y));
-    const x0 = Math.round(radToDegSky(state.skySphere.rotation.x));
-    skySphereRotY.value = y0;
-    skySphereRotYValue.value = y0;
-    skySphereRotX.value = x0;
-    skySphereRotXValue.value = x0;
-  }
 
   // ---- Environment map: image & file upload ----
   const imageEnvMapCheckbox = document.getElementById("imageEnvMapEnabled");
