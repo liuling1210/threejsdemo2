@@ -4,6 +4,7 @@ import { state, getEnvMapIntensityForMaterial } from "./core.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 
 const DEFAULT_MODEL_URL = new URL("../models/test02/test_001.gltf", import.meta.url).href;
+let activeCameraFlight = null;
 
 function setQueueSummary(done, total) {
   const summaryEl = document.getElementById("modelLoadQueueSummary");
@@ -125,6 +126,158 @@ function setQueueCollapsed(collapsed) {
   if (!panelEl || !toggleEl) return;
   panelEl.classList.toggle("collapsed", collapsed);
   toggleEl.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+const nodeTreeCollapsedState = new Map();
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function findHighlightTarget(node) {
+  if (!node) return null;
+  if (node.isMesh || node.isLine || node.isLineSegments) return node;
+  let target = null;
+  node.traverse((child) => {
+    if (!target && (child.isMesh || child.isLine || child.isLineSegments)) target = child;
+  });
+  return target;
+}
+
+function flyCameraToObject(node) {
+  if (!node || !state.camera || !state.controls) return;
+
+  const box = new THREE.Box3().setFromObject(node);
+  if (box.isEmpty()) return;
+
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1e-3);
+  const fov = (state.camera.fov * Math.PI) / 180;
+  const fitDistance = (maxDim / (2 * Math.tan(fov / 2))) * 1.6;
+
+  const viewDir = state.camera.position.clone().sub(state.controls.target);
+  if (viewDir.lengthSq() < 1e-8) viewDir.set(1, 0.6, 1);
+  viewDir.normalize();
+
+  const toPos = center.clone().add(viewDir.multiplyScalar(fitDistance));
+
+  activeCameraFlight = {
+    startTime: performance.now(),
+    duration: 650,
+    fromPos: state.camera.position.clone(),
+    toPos,
+    fromTarget: state.controls.target.clone(),
+    toTarget: center
+  };
+}
+
+function updateCameraFlight() {
+  if (!activeCameraFlight) return;
+
+  const now = performance.now();
+  const t = Math.min(1, (now - activeCameraFlight.startTime) / activeCameraFlight.duration);
+  const k = easeInOutCubic(t);
+
+  state.camera.position.lerpVectors(activeCameraFlight.fromPos, activeCameraFlight.toPos, k);
+  state.controls.target.lerpVectors(activeCameraFlight.fromTarget, activeCameraFlight.toTarget, k);
+  state.controls.update();
+
+  if (t >= 1) activeCameraFlight = null;
+}
+
+function renderModelNodesPanel(model) {
+  const summaryEl = document.getElementById("modelNodesSummary");
+  const listEl = document.getElementById("modelNodesList");
+  if (!summaryEl || !listEl) return;
+
+  if (!model) {
+    summaryEl.textContent = "节点数: —";
+    listEl.textContent = "请先加载模型";
+    nodeTreeCollapsedState.clear();
+    return;
+  }
+
+  let count = 0;
+  const treeRoot = document.createElement("ul");
+  treeRoot.className = "node-tree-root";
+
+  const createNodeItem = (node, pathKey) => {
+    count++;
+    const li = document.createElement("li");
+    li.className = "node-tree-item";
+
+    const row = document.createElement("div");
+    row.className = "node-tree-row";
+
+    const children = node.children || [];
+    const hasChildren = children.length > 0;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "node-tree-toggle";
+
+    const label = document.createElement("span");
+    label.className = "node-tree-label";
+    const name = node.name && node.name.trim() ? node.name : "(未命名)";
+    label.textContent = `[${node.type}] ${name}`;
+    label.title = "双击：高亮并飞到该节点";
+
+    const focusNode = () => {
+      const targetObj = findHighlightTarget(node);
+      if (targetObj) {
+        restoreHighlightedMeshes();
+        highlightMeshOrLine(targetObj);
+      }
+      flyCameraToObject(node);
+    };
+    row.addEventListener("dblclick", focusNode);
+    label.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      focusNode();
+    });
+
+    let childList = null;
+    if (hasChildren) {
+      const collapsed = nodeTreeCollapsedState.get(pathKey) === true;
+      toggle.textContent = collapsed ? "▶" : "▼";
+      toggle.setAttribute("aria-label", collapsed ? "展开节点" : "折叠节点");
+
+      childList = document.createElement("ul");
+      childList.className = "node-tree-children";
+      if (collapsed) childList.style.display = "none";
+
+      toggle.addEventListener("click", () => {
+        const nextCollapsed = childList.style.display !== "none";
+        childList.style.display = nextCollapsed ? "none" : "";
+        toggle.textContent = nextCollapsed ? "▶" : "▼";
+        toggle.setAttribute("aria-label", nextCollapsed ? "展开节点" : "折叠节点");
+        nodeTreeCollapsedState.set(pathKey, nextCollapsed);
+      });
+    } else {
+      toggle.textContent = "•";
+      toggle.disabled = true;
+    }
+
+    row.appendChild(toggle);
+    row.appendChild(label);
+    li.appendChild(row);
+
+    if (hasChildren && childList) {
+      for (let i = 0; i < children.length; i++) {
+        const childKey = `${pathKey}/${i}`;
+        childList.appendChild(createNodeItem(children[i], childKey));
+      }
+      li.appendChild(childList);
+    }
+
+    return li;
+  };
+
+  treeRoot.appendChild(createNodeItem(model, "root"));
+
+  summaryEl.textContent = `节点数: ${count}`;
+  listEl.innerHTML = "";
+  listEl.appendChild(treeRoot);
 }
 
 function formatBytes(bytes) {
@@ -374,6 +527,7 @@ function removeOldModel() {
   state.loadedModels.length = 0;
   state.modelRef = null;
   state.modelAxesHelper = null;
+  renderModelNodesPanel(null);
 
 }
 
@@ -439,6 +593,7 @@ function loadModel(urlOrFile, options = {}) {
       }
 
       state.scene.add(model);
+      renderModelNodesPanel(model);
 
       const mpX = document.getElementById("modelPosX");
       const mpY = document.getElementById("modelPosY");
@@ -581,6 +736,7 @@ export function initModelLoader() {
 
   // Initial load.
   state.lastModelFileSize = null;
+  renderModelNodesPanel(null);
   loadModel(DEFAULT_MODEL_URL).catch((error) => {
     console.error("默认模型加载失败:", error);
   });
@@ -618,6 +774,7 @@ export function startMainLoop() {
 
     updateModelInfoPanel();
     state.controls.update();
+    updateCameraFlight();
 
     state.flowEffects.forEach((effect) => {
       effect.texture.offset.x -= 0.01 * effect.speed;
