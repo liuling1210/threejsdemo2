@@ -117,7 +117,7 @@ function applyPbrToModel(metalness, roughness, envMapIntensity) {
       mats.forEach((mat) => {
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
           const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
-          if (!isTransparent) {
+          if (!isTransparent && !mat.userData.skipGlobalPbr) {
             mat.metalness = metalness;
             mat.roughness = roughness;
           }

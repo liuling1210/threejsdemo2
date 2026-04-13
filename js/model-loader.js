@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { state, getEnvMapIntensityForMaterial } from "./core.js";
+import { state, getEnvMapIntensityForMaterial, syncShadowAndGroundFromModels } from "./core.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
+import { refreshMaterialList } from "./material-editor.js";
 
 const DEFAULT_MODEL_URL = new URL("../models/test02/test_001.gltf", import.meta.url).href;
 let activeCameraFlight = null;
@@ -528,7 +529,8 @@ function removeOldModel() {
   state.modelRef = null;
   state.modelAxesHelper = null;
   renderModelNodesPanel(null);
-
+  refreshMaterialList();
+  syncShadowAndGroundFromModels();
 }
 
 function loadModel(urlOrFile, options = {}) {
@@ -594,6 +596,8 @@ function loadModel(urlOrFile, options = {}) {
 
       state.scene.add(model);
       renderModelNodesPanel(model);
+      refreshMaterialList();
+      syncShadowAndGroundFromModels();
 
       const mpX = document.getElementById("modelPosX");
       const mpY = document.getElementById("modelPosY");
@@ -737,6 +741,7 @@ export function initModelLoader() {
   // Initial load.
   state.lastModelFileSize = null;
   renderModelNodesPanel(null);
+  refreshMaterialList();
   loadModel(DEFAULT_MODEL_URL).catch((error) => {
     console.error("默认模型加载失败:", error);
   });

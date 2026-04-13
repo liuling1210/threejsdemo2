@@ -109,6 +109,7 @@
           <input type="checkbox" id="groundGridEnabled" />
           <label for="groundGridEnabled">地面网格</label>
         </div>
+        <div style="font-size: 11px; color: #666; margin-top: 4px;">开启后叠加网格线；地面始终显示以接收阴影。</div>
       </div>
       <div class="lighting-control-group">
         <div class="lighting-toggle">
@@ -135,6 +136,56 @@
     </div>
 
     <div id="rightPanelsContainer">
+    <div id="materialInspectPanel">
+      <h3>材质编辑</h3>
+      <p id="materialListSummary" class="material-summary">槽位: —</p>
+      <div id="materialList" class="material-list"></div>
+      <div id="materialEditSection" class="material-edit-section" style="display: none;">
+        <p id="materialEditHint" class="material-edit-hint"></p>
+        <div class="material-param-row">
+          <label>颜色</label>
+          <input type="color" id="matEditColor" value="#ffffff" />
+        </div>
+        <div class="material-param-row material-pbr-only">
+          <label>金属度</label>
+          <input type="range" id="matMetalness" min="0" max="1" step="0.01" value="0" />
+          <input type="number" id="matMetalnessValue" min="0" max="1" step="0.01" value="0" />
+        </div>
+        <div class="material-param-row material-pbr-only">
+          <label>粗糙度</label>
+          <input type="range" id="matRoughness" min="0" max="1" step="0.01" value="0.5" />
+          <input type="number" id="matRoughnessValue" min="0" max="1" step="0.01" value="0.5" />
+        </div>
+        <div class="material-param-row">
+          <label>不透明度</label>
+          <input type="range" id="matOpacity" min="0" max="1" step="0.01" value="1" />
+          <input type="number" id="matOpacityValue" min="0" max="1" step="0.01" value="1" />
+        </div>
+        <div class="material-param-row">
+          <label>AlphaTest</label>
+          <input type="range" id="matAlphaTest" min="0" max="1" step="0.01" value="0" />
+          <input type="number" id="matAlphaTestValue" min="0" max="1" step="0.01" value="0" />
+        </div>
+        <div class="material-param-row material-toggle-row">
+          <label class="material-toggle">
+            <input type="checkbox" id="matTransparent" />
+            透明
+          </label>
+          <label class="material-toggle">
+            <input type="checkbox" id="matDepthWrite" checked />
+            深度写入
+          </label>
+        </div>
+        <div class="material-param-row">
+          <label>渲染面</label>
+          <select id="matSide">
+            <option value="0">正面</option>
+            <option value="1">背面</option>
+            <option value="2">双面</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div id="rightPbrPanel">
       <h3>PBR 渲染</h3>
       <div class="pbr-group">

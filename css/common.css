@@ -415,7 +415,7 @@ html,
         margin: 0;
       }
 
-      /* 右侧面板容器：PBR 面板 */
+      /* 右侧面板容器：材质 + PBR */
       #rightPanelsContainer {
         position: absolute;
         top: 120px;
@@ -427,6 +427,116 @@ html,
         max-height: 85vh;
         overflow-y: auto;
         align-items: flex-end;
+      }
+      #materialInspectPanel {
+        position: static;
+        background-color: #fff;
+        border: 2px solid #333;
+        border-radius: 5px;
+        padding: 12px 14px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        min-width: 240px;
+        max-width: 280px;
+      }
+      #materialInspectPanel h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+        font-weight: bold;
+        color: #333;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 6px;
+      }
+      .material-summary {
+        margin: 0 0 6px 0;
+        font-size: 12px;
+        color: #444;
+      }
+      .material-list {
+        max-height: 180px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .material-list-item {
+        text-align: left;
+        padding: 6px 8px;
+        font-size: 11px;
+        line-height: 1.35;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fafafa;
+        cursor: pointer;
+        color: #222;
+      }
+      .material-list-item:hover {
+        background: #f0f0f0;
+        border-color: #999;
+      }
+      .material-list-item.active {
+        background: #e3f2fd;
+        border-color: #1976d2;
+      }
+      .material-edit-section {
+        padding-top: 4px;
+      }
+      .material-edit-hint {
+        margin: 0 0 8px 0;
+        font-size: 11px;
+        color: #c62828;
+        line-height: 1.4;
+      }
+      .material-param-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+      }
+      .material-param-row label {
+        min-width: 52px;
+        font-size: 12px;
+        color: #333;
+        margin: 0;
+      }
+      .material-param-row input[type="range"] {
+        flex: 1;
+        min-width: 60px;
+        max-width: 110px;
+        margin: 0;
+      }
+      .material-param-row input[type="number"] {
+        width: 52px;
+        padding: 3px;
+        font-size: 11px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .material-param-row select {
+        flex: 1;
+        min-width: 100px;
+        padding: 4px;
+        font-size: 12px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .material-toggle-row {
+        gap: 12px;
+      }
+      .material-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: auto;
+        font-size: 12px;
+        font-weight: normal;
+        cursor: pointer;
+      }
+      .material-toggle input {
+        margin: 0;
       }
       #rightPbrPanel {
         position: static;

@@ -49,6 +49,7 @@ export function initCore() {
   state.renderer.setSize(window.innerWidth, window.innerHeight);
   state.renderer.outputColorSpace = THREE.SRGBColorSpace;
   state.renderer.shadowMap.enabled = false;
+  state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   state.renderer.localClippingEnabled = true;
   state.renderer.physicallyCorrectLights = true;
   state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -79,6 +80,7 @@ export function initCore() {
   state.dirLight.shadow.camera.near = 0.5;
   state.dirLight.shadow.camera.far = 50;
   state.scene.add(state.dirLight);
+  state.scene.add(state.dirLight.target);
 
   state.pointLight = new THREE.PointLight(0xffffff, 1.0, 100);
   state.pointLight.position.set(0, 5, 0);
@@ -96,21 +98,23 @@ export function initCore() {
   state.scene.add(state.spotLight);
   state.scene.add(state.spotLight.target);
 
-  // Ground placeholders (kept to avoid errors in event handlers).
-  state.groundPlaneMesh = {
-    visible: false,
-    material: { color: { setStyle() {} } },
-    scale: { set() {} }
-  };
-  state.groundGridHelper = {
-    visible: false,
-    scale: { set() {} },
-    position: { copy() {} }
-  };
+  const groundGeo = new THREE.PlaneGeometry(20, 20);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+  state.groundPlaneMesh = new THREE.Mesh(groundGeo, groundMat);
+  state.groundPlaneMesh.rotation.x = -Math.PI / 2;
+  state.groundPlaneMesh.receiveShadow = true;
+  state.groundPlaneMesh.castShadow = false;
+  state.groundPlaneMesh.visible = true;
+  state.scene.add(state.groundPlaneMesh);
+
+  state.groundGridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x888888);
+  state.groundGridHelper.visible = false;
+  state.scene.add(state.groundGridHelper);
 
   state.modelAxesHelper = null;
 
-  // Expand dir light shadow camera.
+  state.dirLight.shadow.bias = -0.00025;
+  state.dirLight.shadow.normalBias = 0.035;
   state.dirLight.shadow.camera.left = -12;
   state.dirLight.shadow.camera.right = 12;
   state.dirLight.shadow.camera.top = 12;
@@ -138,6 +142,82 @@ export function initCore() {
   window.addEventListener("resize", resize);
 }
 
+const _unionBox = new THREE.Box3();
+const _modelsBox = new THREE.Box3();
+const _sunOffsetDir = new THREE.Vector3(5, 10, 7.5).normalize();
+
+export function getLoadedModelsBoundingBox(targetBox = new THREE.Box3()) {
+  targetBox.makeEmpty();
+  for (let i = 0; i < state.loadedModels.length; i++) {
+    _unionBox.setFromObject(state.loadedModels[i]);
+    targetBox.union(_unionBox);
+  }
+  return targetBox;
+}
+
+/**
+ * Places the ground under loaded models, moves the directional light / target with the scene,
+ * and fits the orthographic shadow frustum to the models (large scenes supported).
+ */
+export function syncShadowAndGroundFromModels() {
+  const ground = state.groundPlaneMesh;
+  const grid = state.groundGridHelper;
+  const light = state.dirLight;
+  if (!light || !ground || !grid) return;
+
+  getLoadedModelsBoundingBox(_modelsBox);
+
+  if (_modelsBox.isEmpty()) {
+    ground.position.set(0, 0, 0);
+    grid.position.set(0, 0.02, 0);
+    light.target.position.set(0, 0, 0);
+    light.position.set(5, 10, 7.5);
+    light.shadow.camera.left = -50;
+    light.shadow.camera.right = 50;
+    light.shadow.camera.top = 50;
+    light.shadow.camera.bottom = -50;
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 250;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+    light.shadow.camera.updateProjectionMatrix();
+    light.target.updateMatrixWorld();
+    return;
+  }
+
+  const center = _modelsBox.getCenter(new THREE.Vector3());
+  const size = _modelsBox.getSize(new THREE.Vector3());
+  const sp = _modelsBox.getBoundingSphere(new THREE.Sphere());
+  const radius = Math.max(sp.radius, 0.5);
+  const margin = Math.max(radius * 0.15, 0.5);
+  const halfFrustum = Math.max(radius + margin, Math.max(size.x, size.y, size.z) * 0.55 + margin);
+
+  const lift = Math.max(0.02, Math.min(radius * 0.002, 5));
+  ground.position.set(center.x, _modelsBox.min.y - lift, center.z);
+  grid.position.set(center.x, ground.position.y + Math.max(0.03, lift * 0.5), center.z);
+
+  const lightDist = Math.max(radius * 6, halfFrustum * 2.5, 50);
+  light.target.position.copy(center);
+  light.position.copy(center.clone().add(_sunOffsetDir.clone().multiplyScalar(lightDist)));
+
+  light.shadow.camera.left = -halfFrustum;
+  light.shadow.camera.right = halfFrustum;
+  light.shadow.camera.top = halfFrustum;
+  light.shadow.camera.bottom = -halfFrustum;
+
+  const depthPad = margin + radius * 0.15;
+  light.shadow.camera.near = Math.max(0.05, lightDist - radius - depthPad);
+  light.shadow.camera.far = lightDist + radius + depthPad;
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const mapSize = maxDim > 140 ? 4096 : maxDim > 70 ? 3072 : 2048;
+  light.shadow.mapSize.width = mapSize;
+  light.shadow.mapSize.height = mapSize;
+
+  light.shadow.camera.updateProjectionMatrix();
+  light.target.updateMatrixWorld();
+}
+
 // Scene/ground UI wiring (model pos, background, shadow, axes, ground placeholders).
 export function initSceneControls() {
   const modelPosX = document.getElementById("modelPosX");
@@ -159,6 +239,7 @@ export function initSceneControls() {
     const y = parseFloat(modelPosY.value) || 0;
     const z = parseFloat(modelPosZ.value) || 0;
     state.modelRef.position.set(x, y, z);
+    syncShadowAndGroundFromModels();
   }
 
   if (modelPosX && modelPosY && modelPosZ) {
@@ -172,10 +253,14 @@ export function initSceneControls() {
   }
 
   function applyGroundSize() {
+    if (!state.groundPlaneMesh || !groundSizeW || !groundSizeD) return;
     const w = Math.max(1, parseFloat(groundSizeW.value) || 20);
     const d = Math.max(1, parseFloat(groundSizeD.value) || 20);
-    state.groundPlaneMesh.scale.set(w / 20, d / 20, 1);
-    state.groundGridHelper.scale.set(w / 20, 1, d / 20);
+    const sx = w / 20;
+    const sz = d / 20;
+    state.groundPlaneMesh.scale.set(sx, 1, sz);
+    state.groundGridHelper.scale.set(sx, 1, sz);
+    syncShadowAndGroundFromModels();
   }
 
   if (groundSizeW && groundSizeD) {
@@ -194,6 +279,7 @@ export function initSceneControls() {
       const on = e.target.checked;
       state.renderer.shadowMap.enabled = on;
       state.dirLight.castShadow = on;
+      if (on) syncShadowAndGroundFromModels();
     });
   }
 
@@ -217,9 +303,11 @@ export function initSceneControls() {
     groundGridEnabled.addEventListener("change", (e) => {
       const useGrid = e.target.checked;
       state.groundGridHelper.visible = useGrid;
-      state.groundPlaneMesh.visible = !useGrid;
+      state.groundPlaneMesh.visible = true;
     });
   }
+
+  applyGroundSize();
 
   if (modelAxesEnabled) {
     modelAxesEnabled.addEventListener("change", (e) => {
