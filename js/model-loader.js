@@ -5,6 +5,10 @@ import { setOutlineSelectedObjects } from "./post-outline.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 import { refreshMaterialList } from "./material-editor.js";
 import { applyTexturedAlphaShadowFix } from "./alpha-cutout-shadow.js";
+import {
+  setFoliageBillboardOnObject3D,
+  DEFAULT_FOLIAGE_ALPHA_TEST
+} from "./foliage-billboard.js";
 
 const DEFAULT_MODEL_URL = new URL("../models/test02/test_001.gltf", import.meta.url).href;
 let activeCameraFlight = null;
@@ -585,7 +589,7 @@ function loadModel(urlOrFile, options = {}) {
               if (isTransparent) {
                 hasTransparent = true;
                 mat.transparent = true;
-                mat.depthWrite = false;
+                mat.depthWrite = true;
                 if (mat.side !== undefined) mat.side = THREE.DoubleSide;
                 mat.needsUpdate = true;
               }
@@ -597,6 +601,17 @@ function loadModel(urlOrFile, options = {}) {
 
       // 透明/alpha 贴图面片：为阴影 depth pass 启用 alpha 裁切（避免整块矩形阴影）。
       applyTexturedAlphaShadowFix(model);
+
+      const foliageCb = document.getElementById("pbrFoliageBillboardEnabled");
+      if (foliageCb && foliageCb.checked) {
+        const atEl = document.getElementById("pbrFoliageAlphaTestValue");
+        const at = parseFloat(atEl?.value);
+        setFoliageBillboardOnObject3D(
+          model,
+          true,
+          Number.isFinite(at) ? at : DEFAULT_FOLIAGE_ALPHA_TEST
+        );
+      }
 
       state.scene.add(model);
       renderModelNodesPanel(model);

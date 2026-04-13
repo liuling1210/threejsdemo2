@@ -2,6 +2,10 @@ import { state, syncShadowAndGroundFromModels } from "./core.js";
 import { syncPbrFromPanel } from "./pbr.js";
 import { getOutlineSettings, applyOutlineSettings } from "./post-outline.js";
 import { collectMaterialsSnapshot, applyMaterialsSnapshot } from "./material-editor.js";
+import {
+  applyFoliageBillboardToAllLoadedModels,
+  DEFAULT_FOLIAGE_ALPHA_TEST
+} from "./foliage-billboard.js";
 
 const SETTINGS_MAGIC = "dev_threejsdemo2-settings";
 /** 当前导出版本；v2 起含 materialSlots（逐材质槽位参数） */
@@ -99,7 +103,9 @@ export function collectSettingsSnapshot() {
       pbrEnvEnabled: el("pbrEnvEnabled") ? !!el("pbrEnvEnabled").checked : true,
       transparencyEnabled: !!el("pbrTransparencyEnabled")?.checked,
       opacity: parseFloat(el("pbrOpacityValue")?.value) || 0.8,
-      alphaTest: parseFloat(el("pbrAlphaTestValue")?.value) || 0
+      alphaTest: parseFloat(el("pbrAlphaTestValue")?.value) || 0,
+      foliageBillboardEnabled: !!el("pbrFoliageBillboardEnabled")?.checked,
+      foliageAlphaTest: parseFloat(el("pbrFoliageAlphaTestValue")?.value) || DEFAULT_FOLIAGE_ALPHA_TEST
     },
     outline: getOutlineSettings(),
     materialSlots
@@ -207,6 +213,10 @@ export function applySettingsSnapshot(data) {
   if (P.transparencyEnabled != null) setCheckbox("pbrTransparencyEnabled", P.transparencyEnabled);
   if (P.opacity != null) setRangeNumberPair("pbrOpacity", "pbrOpacityValue", P.opacity);
   if (P.alphaTest != null) setRangeNumberPair("pbrAlphaTest", "pbrAlphaTestValue", P.alphaTest);
+  if (P.foliageAlphaTest != null) {
+    setRangeNumberPair("pbrFoliageAlphaTest", "pbrFoliageAlphaTestValue", P.foliageAlphaTest);
+  }
+  if (P.foliageBillboardEnabled != null) setCheckbox("pbrFoliageBillboardEnabled", P.foliageBillboardEnabled);
 
   applyOutlineSettings(data.outline);
 
@@ -216,6 +226,14 @@ export function applySettingsSnapshot(data) {
   const materialSlots =
     data.version >= 2 && Array.isArray(data.materialSlots) ? data.materialSlots : [];
   applyMaterialsSnapshot(materialSlots);
+
+  if (P.foliageBillboardEnabled === true) {
+    const at =
+      parseFloat(el("pbrFoliageAlphaTestValue")?.value) || P.foliageAlphaTest || DEFAULT_FOLIAGE_ALPHA_TEST;
+    applyFoliageBillboardToAllLoadedModels(true, at);
+  } else if (P.foliageBillboardEnabled === false) {
+    applyFoliageBillboardToAllLoadedModels(false);
+  }
 }
 
 export function downloadSettingsTxt() {

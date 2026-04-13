@@ -323,7 +323,9 @@ function serializeMaterialProps(mat) {
     alphaTest: typeof mat.alphaTest === "number" ? mat.alphaTest : 0,
     depthWrite: mat.depthWrite !== false,
     side: mat.side === THREE.DoubleSide ? 2 : mat.side === THREE.BackSide ? 1 : 0,
-    skipGlobalPbr: !!mat.userData.skipGlobalPbr
+    skipGlobalPbr: !!mat.userData.skipGlobalPbr,
+    vertexColors: !!mat.vertexColors,
+    foliageBillboardBasic: !!mat.userData.foliageBillboardBasic
   };
   if (mat.color && mat.color.isColor) props.color = "#" + mat.color.getHexString();
   if (isPbr(mat)) {
@@ -393,6 +395,8 @@ function applyMaterialProps(mat, props) {
     mat.side = map[props.side] ?? THREE.FrontSide;
   }
   if (props.skipGlobalPbr != null) mat.userData.skipGlobalPbr = props.skipGlobalPbr;
+  if (props.vertexColors != null && "vertexColors" in mat) mat.vertexColors = props.vertexColors;
+  if (props.foliageBillboardBasic != null) mat.userData.foliageBillboardBasic = props.foliageBillboardBasic;
   if (state.envMap && isPbr(mat)) {
     mat.envMap = state.envMap;
   }

@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { state, getEnvMapIntensityForMaterial } from "./core.js";
+import {
+  applyFoliageBillboardToAllLoadedModels,
+  DEFAULT_FOLIAGE_ALPHA_TEST
+} from "./foliage-billboard.js";
 
 let pbrMetalnessValue;
 let pbrRoughnessValue;
@@ -67,6 +71,7 @@ export function generateEnvironmentMapFromScene() {
       if (child.isMesh && child.material) {
         if (Array.isArray(child.material)) {
           child.material.forEach((mat) => {
+            if (mat.userData.foliageBillboardBasic) return;
             if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
               mat.envMap = state.envMap;
               mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, 1.0);
@@ -74,7 +79,10 @@ export function generateEnvironmentMapFromScene() {
             }
           });
         } else {
-          if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+          if (
+            !child.material.userData.foliageBillboardBasic &&
+            (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial)
+          ) {
             child.material.envMap = state.envMap;
             child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, 1.0);
             child.material.needsUpdate = true;
@@ -99,6 +107,7 @@ function applyPbrToModel(metalness, roughness, envMapIntensity) {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach((mat) => {
+          if (mat.userData.foliageBillboardBasic) return;
           if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
             mat.envMap = null;
             mat.envMapIntensity = 0;
@@ -115,6 +124,7 @@ function applyPbrToModel(metalness, roughness, envMapIntensity) {
     if (child.isMesh && child.material) {
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       mats.forEach((mat) => {
+        if (mat.userData.foliageBillboardBasic) return;
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
           const isTransparent = mat.transparent === true || (typeof mat.opacity === "number" && mat.opacity < 1);
           if (!isTransparent && !mat.userData.skipGlobalPbr) {
@@ -142,7 +152,8 @@ function applyTransparencyFix(enable) {
         if (isTransparent) {
           hasTransparent = true;
           mat.transparent = enable;
-          mat.depthWrite = !enable;
+          // 面片树等：配合 alphaTest 裁切时保持深度写入，避免十字面片互相穿透、排序错误。
+          mat.depthWrite = true;
           if (mat.side !== undefined) mat.side = enable ? THREE.DoubleSide : THREE.FrontSide;
           mat.needsUpdate = true;
         }
@@ -189,6 +200,7 @@ function clearImageEnvironmentMap() {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material) ? child.material : [child.material];
         mats.forEach((mat) => {
+          if (mat.userData.foliageBillboardBasic) return;
           if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
             mat.envMap = null;
             mat.envMapIntensity = 0;
@@ -234,6 +246,7 @@ function loadImageEnvironmentMap() {
           if (child.isMesh && child.material) {
             if (Array.isArray(child.material)) {
               child.material.forEach((mat) => {
+                if (mat.userData.foliageBillboardBasic) return;
                 if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                   mat.envMap = state.envMap;
                   mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envIntensity);
@@ -241,7 +254,10 @@ function loadImageEnvironmentMap() {
                 }
               });
             } else {
-              if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+              if (
+                !child.material.userData.foliageBillboardBasic &&
+                (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial)
+              ) {
                 child.material.envMap = state.envMap;
                 child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, envIntensity);
                 child.material.needsUpdate = true;
@@ -295,6 +311,7 @@ function loadEnvironmentMapFromFile(file) {
           if (child.isMesh && child.material) {
             if (Array.isArray(child.material)) {
               child.material.forEach((mat) => {
+                if (mat.userData.foliageBillboardBasic) return;
                 if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                   mat.envMap = state.envMap;
                   mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envIntensity);
@@ -302,7 +319,10 @@ function loadEnvironmentMapFromFile(file) {
                 }
               });
             } else {
-              if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+              if (
+                !child.material.userData.foliageBillboardBasic &&
+                (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial)
+              ) {
                 child.material.envMap = state.envMap;
                 child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, envIntensity);
                 child.material.needsUpdate = true;
@@ -407,6 +427,38 @@ export function initPbrControls() {
     });
   }
   if (pbrAlphaTestValue) pbrAlphaTestValue.addEventListener("input", () => syncTransparencyFromPanel());
+
+  const pbrFoliageBillboardEnabled = document.getElementById("pbrFoliageBillboardEnabled");
+  const pbrFoliageAlphaTest = document.getElementById("pbrFoliageAlphaTest");
+  const pbrFoliageAlphaTestValue = document.getElementById("pbrFoliageAlphaTestValue");
+
+  function readFoliageAlphaTest() {
+    const v = parseFloat(pbrFoliageAlphaTestValue?.value);
+    return Number.isFinite(v) ? v : DEFAULT_FOLIAGE_ALPHA_TEST;
+  }
+
+  function syncFoliageBillboardFromPanel() {
+    if (!pbrFoliageBillboardEnabled) return;
+    const on = pbrFoliageBillboardEnabled.checked;
+    if (on) applyFoliageBillboardToAllLoadedModels(true, readFoliageAlphaTest());
+    else applyFoliageBillboardToAllLoadedModels(false);
+  }
+
+  if (pbrFoliageBillboardEnabled) {
+    pbrFoliageBillboardEnabled.addEventListener("change", () => syncFoliageBillboardFromPanel());
+  }
+  if (pbrFoliageAlphaTest && pbrFoliageAlphaTestValue) {
+    pbrFoliageAlphaTest.addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value);
+      if (Number.isFinite(v)) pbrFoliageAlphaTestValue.value = v.toFixed(2);
+      if (pbrFoliageBillboardEnabled?.checked) applyFoliageBillboardToAllLoadedModels(true, readFoliageAlphaTest());
+    });
+    pbrFoliageAlphaTestValue.addEventListener("input", () => {
+      const v = parseFloat(pbrFoliageAlphaTestValue.value);
+      if (pbrFoliageAlphaTest && Number.isFinite(v)) pbrFoliageAlphaTest.value = String(v);
+      if (pbrFoliageBillboardEnabled?.checked) applyFoliageBillboardToAllLoadedModels(true, readFoliageAlphaTest());
+    });
+  }
 
   // ---- Environment map: image & file upload ----
   const imageEnvMapCheckbox = document.getElementById("imageEnvMapEnabled");
