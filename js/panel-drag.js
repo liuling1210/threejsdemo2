@@ -72,7 +72,7 @@ function bindPanelDrag(panel, handle) {
 }
 
 const PANEL_DRAG_CONFIG = [
-  { root: "#modelInfoPanel", handle: ".info-title.panel-drag-handle" },
+  { root: "#modelInfoDock", handle: ".info-title.panel-drag-handle" },
   { root: "#modelNodesPanel", handle: ".info-title.panel-drag-handle" },
   { root: "#leftPanelsWrap", handle: ".panel-drag-handle--bar" },
   { root: "#rightPanelsContainer", handle: ".panel-drag-handle--bar" },

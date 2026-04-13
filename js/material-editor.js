@@ -313,3 +313,108 @@ export function initMaterialEditor() {
 
   refreshMaterialList();
 }
+
+function serializeMaterialProps(mat) {
+  if (!mat) return null;
+  const props = {
+    type: mat.type,
+    opacity: typeof mat.opacity === "number" ? mat.opacity : 1,
+    transparent: !!mat.transparent,
+    alphaTest: typeof mat.alphaTest === "number" ? mat.alphaTest : 0,
+    depthWrite: mat.depthWrite !== false,
+    side: mat.side === THREE.DoubleSide ? 2 : mat.side === THREE.BackSide ? 1 : 0,
+    skipGlobalPbr: !!mat.userData.skipGlobalPbr
+  };
+  if (mat.color && mat.color.isColor) props.color = "#" + mat.color.getHexString();
+  if (isPbr(mat)) {
+    props.metalness = mat.metalness;
+    props.roughness = mat.roughness;
+    props.envMapIntensity = typeof mat.envMapIntensity === "number" ? mat.envMapIntensity : 1;
+  }
+  return props;
+}
+
+/**
+ * 按「加载模型根序号 + 子节点下标路径 + 材质槽」记录，便于同结构模型还原（重新加载后 UUID 会变）。
+ */
+export function collectMaterialsSnapshot() {
+  const roots = state.loadedModels || [];
+  const out = [];
+  for (let mi = 0; mi < roots.length; mi++) {
+    const walk = (node, path) => {
+      if (node.isMesh && node.material) {
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        for (let slot = 0; slot < mats.length; slot++) {
+          const mat = mats[slot];
+          if (mat) {
+            out.push({
+              modelIndex: mi,
+              path: path.slice(),
+              slot,
+              props: serializeMaterialProps(mat)
+            });
+          }
+        }
+      }
+      const ch = node.children;
+      for (let j = 0; j < ch.length; j++) walk(ch[j], path.concat(j));
+    };
+    walk(roots[mi], []);
+  }
+  return out;
+}
+
+function resolveMeshByPath(modelIndex, path) {
+  const roots = state.loadedModels || [];
+  let o = roots[modelIndex];
+  if (!o) return null;
+  for (let i = 0; i < path.length; i++) {
+    const idx = path[i];
+    if (!o.children || idx < 0 || idx >= o.children.length) return null;
+    o = o.children[idx];
+  }
+  return o && o.isMesh ? o : null;
+}
+
+function applyMaterialProps(mat, props) {
+  if (!mat || !props) return;
+  if (props.color != null && hasColor(mat)) mat.color.set(props.color);
+  if (isPbr(mat)) {
+    if (props.metalness != null) mat.metalness = props.metalness;
+    if (props.roughness != null) mat.roughness = props.roughness;
+    if (props.envMapIntensity != null) mat.envMapIntensity = props.envMapIntensity;
+  }
+  if (props.opacity != null) mat.opacity = props.opacity;
+  if (props.transparent != null) mat.transparent = props.transparent;
+  if (props.alphaTest != null) mat.alphaTest = props.alphaTest;
+  if (props.depthWrite != null) mat.depthWrite = props.depthWrite;
+  if (props.side != null) {
+    const map = { 0: THREE.FrontSide, 1: THREE.BackSide, 2: THREE.DoubleSide };
+    mat.side = map[props.side] ?? THREE.FrontSide;
+  }
+  if (props.skipGlobalPbr != null) mat.userData.skipGlobalPbr = props.skipGlobalPbr;
+  if (state.envMap && isPbr(mat)) {
+    mat.envMap = state.envMap;
+  }
+  mat.needsUpdate = true;
+}
+
+/**
+ * @param {ReturnType<typeof collectMaterialsSnapshot>} entries
+ */
+export function applyMaterialsSnapshot(entries) {
+  if (!Array.isArray(entries) || !entries.length) {
+    refreshMaterialList();
+    return;
+  }
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (!e || !e.props || !Array.isArray(e.path) || typeof e.slot !== "number" || typeof e.modelIndex !== "number") continue;
+    const mesh = resolveMeshByPath(e.modelIndex, e.path);
+    if (!mesh) continue;
+    const mat = ensureUniqueMaterial(mesh, e.slot);
+    if (!mat) continue;
+    applyMaterialProps(mat, e.props);
+  }
+  refreshMaterialList();
+}

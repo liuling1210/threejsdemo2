@@ -55,3 +55,30 @@ export function initPostOutline() {
 
   window.addEventListener("resize", onWindowResizeComposer);
 }
+
+export function getOutlineSettings() {
+  const p = state.outlinePass;
+  if (!p) return null;
+  return {
+    visibleEdgeColor: "#" + p.visibleEdgeColor.getHexString(),
+    hiddenEdgeColor: "#" + p.hiddenEdgeColor.getHexString(),
+    edgeStrength: p.edgeStrength,
+    edgeGlow: p.edgeGlow,
+    edgeThickness: p.edgeThickness,
+    pulsePeriod: p.pulsePeriod
+  };
+}
+
+/**
+ * @param {Partial<ReturnType<typeof getOutlineSettings>> | null | undefined} s
+ */
+export function applyOutlineSettings(s) {
+  const p = state.outlinePass;
+  if (!p || !s) return;
+  if (s.visibleEdgeColor != null) p.visibleEdgeColor.set(s.visibleEdgeColor);
+  if (s.hiddenEdgeColor != null) p.hiddenEdgeColor.set(s.hiddenEdgeColor);
+  if (typeof s.edgeStrength === "number") p.edgeStrength = s.edgeStrength;
+  if (typeof s.edgeGlow === "number") p.edgeGlow = s.edgeGlow;
+  if (typeof s.edgeThickness === "number") p.edgeThickness = s.edgeThickness;
+  if (typeof s.pulsePeriod === "number") p.pulsePeriod = s.pulsePeriod;
+}

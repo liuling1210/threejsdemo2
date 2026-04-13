@@ -17,11 +17,18 @@
   <body data-module="lighting">
 <canvas id="viewport"></canvas>
 
-    <div id="modelInfoPanel">
-      <div class="info-title panel-drag-handle">模型信息</div>
-      <div id="modelInfoFileSize">文件大小: —</div>
-      <div id="modelInfoFaces">面数: —</div>
-      <div id="modelInfoFps">帧率: —</div>
+    <div id="modelInfoDock" class="model-info-dock">
+      <div id="modelInfoPanel">
+        <div class="info-title panel-drag-handle">模型信息</div>
+        <div id="modelInfoFileSize">文件大小: —</div>
+        <div id="modelInfoFaces">面数: —</div>
+        <div id="modelInfoFps">帧率: —</div>
+      </div>
+      <div class="model-info-dock-actions">
+        <button type="button" id="saveSettingsDocBtn" class="settings-doc-btn">保存成文档</button>
+        <button type="button" id="loadSettingsDocBtn" class="settings-doc-btn">加载设置</button>
+        <input type="file" id="loadSettingsFileInput" accept=".txt,text/plain,application/json" hidden />
+      </div>
     </div>
 
     <div id="leftPanelsWrap">

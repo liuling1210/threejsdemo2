@@ -5,6 +5,7 @@ import { initMaterialEditor } from "./material-editor.js";
 import { initDraggablePanels } from "./panel-drag.js";
 import { initPostOutline } from "./post-outline.js";
 import { initViewportMeshPick } from "./viewport-pick.js";
+import { initSettingsPersist } from "./settings-persist.js";
 import { initModelLoader, startMainLoop } from "./model-loader.js";
 
 initCore();
@@ -16,5 +17,6 @@ initDraggablePanels();
 initModelLoader();
 initViewportMeshPick();
 initLightingControls();
+initSettingsPersist();
 startMainLoop();
 

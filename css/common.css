@@ -568,11 +568,18 @@ html,
         max-height: 70vh;
         overflow-y: auto;
       }
-      #modelInfoPanel {
+      #modelInfoDock {
         position: absolute;
         left: 20px;
         bottom: 20px;
         z-index: 100;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      #modelInfoPanel {
+        position: static;
         background-color: rgba(255, 255, 255, 0.9);
         border: 1px solid #333;
         border-radius: 4px;
@@ -586,6 +593,26 @@ html,
       #modelInfoPanel .info-title {
         font-weight: bold;
         margin-bottom: 4px;
+      }
+      .model-info-dock-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .settings-doc-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px solid #333;
+        border-radius: 4px;
+        background: #fff;
+        color: #222;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        white-space: nowrap;
+      }
+      .settings-doc-btn:hover {
+        background: #f5f5f5;
       }
 
       #modelNodesPanel {
