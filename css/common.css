@@ -97,6 +97,112 @@ html,
         margin-bottom: 10px;
       }
 
+      /* 可拖拽面板：拖条与标题 */
+      .panel-drag-handle {
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .panel-drag-handle:active {
+        cursor: grabbing;
+      }
+      .panel-drag-handle--bar {
+        flex-shrink: 0;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #444;
+        background: linear-gradient(180deg, #f5f5f5, #e8e8e8);
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      #leftPanelsWrap > .panel-drag-handle--bar:first-child {
+        width: 100%;
+      }
+      #rightPanelsContainer > .panel-drag-handle--bar:first-child {
+        width: 100%;
+        align-self: stretch;
+      }
+
+      #floatingToolbar {
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-width: min(94vw, 580px);
+      }
+      .floating-toolbar-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      #floatingToolbar #uploadButton,
+      #floatingToolbar #uploadFolderButton,
+      #floatingToolbar #clearModelsButton {
+        position: static;
+        margin: 0;
+        padding: 10px 14px;
+        font-size: 13px;
+        border: 2px solid #333;
+        border-radius: 5px;
+        background-color: #fff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transition: background-color 0.15s, border-color 0.15s;
+      }
+      #floatingToolbar #uploadButton {
+        font-size: 14px;
+        padding: 10px 20px;
+      }
+      #floatingToolbar #clearModelsButton {
+        font-size: 12px;
+        padding: 10px 12px;
+      }
+      #floatingToolbar #uploadFolderButton {
+        font-size: 12px;
+        padding: 10px 12px;
+      }
+      #floatingToolbar #uploadButton:hover,
+      #floatingToolbar #uploadFolderButton:hover,
+      #floatingToolbar #clearModelsButton:hover {
+        background-color: #f0f0f0;
+        border-color: #666;
+      }
+      #floatingToolbar #uploadButton:active,
+      #floatingToolbar #uploadFolderButton:active,
+      #floatingToolbar #clearModelsButton:active {
+        background-color: #e0e0e0;
+      }
+
+      .queue-panel-top {
+        display: flex;
+        align-items: stretch;
+        min-height: 36px;
+      }
+      .queue-drag-grip {
+        flex: 0 0 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        letter-spacing: -2px;
+        color: #666;
+        background: #eee;
+        border-right: 1px solid #ccc;
+        border-radius: 4px 0 0 0;
+      }
+      .queue-panel-top #modelLoadQueueToggle {
+        flex: 1;
+        min-width: 0;
+        border-radius: 0 4px 0 0;
+      }
+
       /* 左侧面板容器：光照 + 场景与地面 */
       #leftPanelsWrap {
         position: absolute;
@@ -164,78 +270,6 @@ html,
         display: flex;
         align-items: center;
         margin-bottom: 10px;
-      }
-
-      #uploadButton {
-        position: absolute;
-        top: 70px;
-        right: 250px;
-        z-index: 100;
-        padding: 10px 20px;
-        font-size: 14px;
-        border: 2px solid #333;
-        border-radius: 5px;
-        background-color: #fff;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transition: all 0.2s;
-      }
-
-      #clearModelsButton {
-        position: absolute;
-        top: 70px;
-        right: 20px;
-        z-index: 100;
-        padding: 10px 12px;
-        font-size: 12px;
-        border: 2px solid #333;
-        border-radius: 5px;
-        background-color: #fff;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transition: all 0.2s;
-      }
-
-      #clearModelsButton:hover {
-        background-color: #f0f0f0;
-        border-color: #666;
-      }
-
-      #clearModelsButton:active {
-        background-color: #e0e0e0;
-      }
-
-      #uploadButton:hover {
-        background-color: #f0f0f0;
-        border-color: #666;
-      }
-
-      #uploadFolderButton {
-        position: absolute;
-        top: 70px;
-        right: 140px;
-        z-index: 100;
-        padding: 10px 12px;
-        font-size: 12px;
-        border: 2px solid #333;
-        border-radius: 5px;
-        background-color: #fff;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transition: all 0.2s;
-      }
-
-      #uploadFolderButton:hover {
-        background-color: #f0f0f0;
-        border-color: #666;
-      }
-
-      #uploadFolderButton:active {
-        background-color: #e0e0e0;
-      }
-
-      #uploadButton:active {
-        background-color: #e0e0e0;
       }
 
       #fileInput {
@@ -322,21 +356,6 @@ html,
         color: #c62828;
       }
 
-      /* 右侧 PBR 渲染面板（上传按钮下方） */
-      #rightPbrPanel {
-        position: absolute;
-        top: 120px;
-        right: 20px;
-        z-index: 100;
-        background-color: #fff;
-        border: 2px solid #333;
-        border-radius: 5px;
-        padding: 15px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        min-width: 220px;
-        max-height: 70vh;
-        overflow-y: auto;
-      }
       #rightPbrPanel h3 {
         margin: 0 0 12px 0;
         font-size: 15px;
@@ -540,8 +559,14 @@ html,
       }
       #rightPbrPanel {
         position: static;
-        top: auto;
-        right: auto;
+        background-color: #fff;
+        border: 2px solid #333;
+        border-radius: 5px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        min-width: 220px;
+        max-height: 70vh;
+        overflow-y: auto;
       }
       #modelInfoPanel {
         position: absolute;

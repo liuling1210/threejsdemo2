@@ -18,13 +18,14 @@
 <canvas id="viewport"></canvas>
 
     <div id="modelInfoPanel">
-      <div class="info-title">模型信息</div>
+      <div class="info-title panel-drag-handle">模型信息</div>
       <div id="modelInfoFileSize">文件大小: —</div>
       <div id="modelInfoFaces">面数: —</div>
       <div id="modelInfoFps">帧率: —</div>
     </div>
 
     <div id="leftPanelsWrap">
+    <div class="panel-drag-handle panel-drag-handle--bar" title="拖拽移动">左侧面板</div>
     <!-- 左侧光照面板：环境光 + 主光源平行光 -->
     <div id="leftLightingPanel">
       <h3>光照系统</h3>
@@ -114,11 +115,17 @@
     </div>
     </div>
 
-    <button id="uploadButton">上传GLB模型</button>
-    <button id="clearModelsButton" style="margin-left:8px;">清空所有模型</button>
+    <div id="floatingToolbar">
+      <div class="panel-drag-handle panel-drag-handle--bar" title="拖拽移动">模型操作</div>
+      <div class="floating-toolbar-buttons">
+        <button id="uploadButton" type="button">上传GLB模型</button>
+        <button id="clearModelsButton" type="button">清空所有模型</button>
+      </div>
+    </div>
     <input type="file" id="fileInput" accept=".glb,.gltf" />
 
     <div id="rightPanelsContainer">
+    <div class="panel-drag-handle panel-drag-handle--bar" title="拖拽移动">右侧面板</div>
     <div id="rightPbrPanel">
       <h3>PBR 渲染</h3>
       <div class="pbr-group">
