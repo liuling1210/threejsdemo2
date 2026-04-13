@@ -31,6 +31,9 @@ export const state = {
   highlightedMeshes: [],
   highlightedLines: [],
   flowEffects: [],
+
+  composer: null,
+  outlinePass: null,
 };
 
 // Transparent material envMap intensity compensation:
@@ -104,7 +107,7 @@ export function initCore() {
   state.groundPlaneMesh.rotation.x = -Math.PI / 2;
   state.groundPlaneMesh.receiveShadow = true;
   state.groundPlaneMesh.castShadow = false;
-  state.groundPlaneMesh.visible = true;
+  state.groundPlaneMesh.visible = false;
   state.scene.add(state.groundPlaneMesh);
 
   state.groundGridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x888888);
@@ -303,7 +306,6 @@ export function initSceneControls() {
     groundGridEnabled.addEventListener("change", (e) => {
       const useGrid = e.target.checked;
       state.groundGridHelper.visible = useGrid;
-      state.groundPlaneMesh.visible = true;
     });
   }
 

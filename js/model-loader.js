@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { state, getEnvMapIntensityForMaterial, syncShadowAndGroundFromModels } from "./core.js";
+import { setOutlineSelectedObjects } from "./post-outline.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 import { refreshMaterialList } from "./material-editor.js";
 
@@ -187,6 +188,44 @@ function updateCameraFlight() {
   if (t >= 1) activeCameraFlight = null;
 }
 
+function svgWrap(inner) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+const MESH_VIS_SVG = {
+  on: svgWrap(
+    '<path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>'
+  ),
+  off: svgWrap(
+    '<path d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 0 1 1.563-3.029m5.858.908a3 3 0 1 1 4.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0 1 12 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 0 1-4.132 5.411m0 0L21 21"/>'
+  )
+};
+
+function createMeshVisibilityButton(mesh) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "node-tree-vis-btn";
+
+  function sync() {
+    const on = mesh.visible;
+    btn.innerHTML = on ? MESH_VIS_SVG.on : MESH_VIS_SVG.off;
+    btn.setAttribute("aria-label", on ? "隐藏网格" : "显示网格");
+    btn.title = on ? "隐藏" : "显示";
+    btn.classList.toggle("node-tree-vis-btn--off", !on);
+  }
+
+  sync();
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    mesh.visible = !mesh.visible;
+    sync();
+  });
+  btn.addEventListener("dblclick", (e) => e.stopPropagation());
+
+  return btn;
+}
+
 function renderModelNodesPanel(model) {
   const summaryEl = document.getElementById("modelNodesSummary");
   const listEl = document.getElementById("modelNodesList");
@@ -227,7 +266,8 @@ function renderModelNodesPanel(model) {
       const targetObj = findHighlightTarget(node);
       if (targetObj) {
         restoreHighlightedMeshes();
-        highlightMeshOrLine(targetObj);
+        if (targetObj.isMesh) setOutlineSelectedObjects([targetObj]);
+        else highlightMeshOrLine(targetObj);
       }
       flyCameraToObject(node);
     };
@@ -261,6 +301,9 @@ function renderModelNodesPanel(model) {
 
     row.appendChild(toggle);
     row.appendChild(label);
+    if (node.isMesh) {
+      row.appendChild(createMeshVisibilityButton(node));
+    }
     li.appendChild(row);
 
     if (hasChildren && childList) {
@@ -302,7 +345,7 @@ function getModelFaceCount() {
   return Math.floor(faces);
 }
 
-function restoreHighlightedMeshes() {
+export function restoreHighlightedMeshes() {
   state.highlightedMeshes.forEach((item) => {
     if (item.mesh && item.originalMaterial) {
       item.mesh.material = item.originalMaterial;
@@ -318,6 +361,8 @@ function restoreHighlightedMeshes() {
 
   // Clear flow effects.
   state.flowEffects = [];
+
+  setOutlineSelectedObjects([]);
 }
 
 function extractPointsFromLine(lineObject) {
@@ -398,71 +443,26 @@ function createThickLine(points, baseRadius = 0.01) {
   return tube;
 }
 
-function extractPointsFromMesh(mesh) {
-  if (!mesh || !mesh.geometry) return [];
-  const geometry = mesh.geometry;
-  if (!geometry.attributes || !geometry.attributes.position) return [];
-
-  mesh.updateMatrixWorld(true);
-  const points = [];
-  const positions = geometry.attributes.position;
-
-  if (geometry.index) {
-    const index = geometry.index;
-    const seen = new Set();
-    for (let i = 0; i < index.count; i++) {
-      const vertexIndex = index.getX(i);
-      const point = new THREE.Vector3();
-      point.fromBufferAttribute(positions, vertexIndex);
-      point.applyMatrix4(mesh.matrixWorld);
-
-      const key = `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        points.push(point);
-      }
-    }
-  } else {
-    const seen = new Set();
-    for (let i = 0; i < positions.count; i++) {
-      const point = new THREE.Vector3();
-      point.fromBufferAttribute(positions, i);
-      point.applyMatrix4(mesh.matrixWorld);
-
-      const key = `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        points.push(point);
-      }
-    }
-  }
-
-  return points;
-}
-
 function highlightMeshOrLine(obj) {
   if (!obj) return;
+
+  if (obj.isMesh) {
+    setOutlineSelectedObjects([obj]);
+    return;
+  }
 
   const box = new THREE.Box3().setFromObject(state.modelRef);
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
   const lineRadius = maxDim * 0.003;
 
-  let points = [];
-  if (obj.isLine || obj.isLineSegments) {
-    points = extractPointsFromLine(obj);
-  } else if (obj.isMesh) {
-    points = extractPointsFromMesh(obj);
-  }
-
+  const points = obj.isLine || obj.isLineSegments ? extractPointsFromLine(obj) : [];
   if (points.length >= 2) {
     const thickLine = createThickLine(points, lineRadius);
     if (thickLine) {
       state.scene.add(thickLine);
       state.highlightedLines.push(thickLine);
     }
-  } else if (obj.isMesh && points.length < 2) {
-    highlightMesh(obj);
   }
 }
 
@@ -785,7 +785,8 @@ export function startMainLoop() {
       effect.texture.offset.x -= 0.01 * effect.speed;
     });
 
-    state.renderer.render(state.scene, state.camera);
+    if (state.composer) state.composer.render();
+    else state.renderer.render(state.scene, state.camera);
   };
 
   animate();
