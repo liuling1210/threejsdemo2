@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { state, getEnvMapIntensityForMaterial, syncShadowAndGroundFromModels } from "./core.js";
+import { state, getEnvMapIntensityForMaterial, syncShadowAndGroundFromModels, syncCameraClippingPlanes } from "./core.js";
 import { setOutlineSelectedObjects } from "./post-outline.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 import { refreshMaterialList } from "./material-editor.js";
@@ -10,8 +10,32 @@ import {
   DEFAULT_FOLIAGE_ALPHA_TEST
 } from "./foliage-billboard.js";
 
-const DEFAULT_MODEL_URL = new URL("../models/test02/test_001.gltf", import.meta.url).href;
+const DEFAULT_MODEL_URL = new URL("../models/test02/dongshun001.gltf", import.meta.url).href;
 let activeCameraFlight = null;
+const PUDDLE_GROUP_PREFIX = "WPW_puddle";
+
+function hasNamePrefix(obj, prefix) {
+  return !!(obj && typeof obj.name === "string" && obj.name.startsWith(prefix));
+}
+
+function tintMeshMaterialsRed(mesh) {
+  if (!mesh || !mesh.material) return;
+  if (Array.isArray(mesh.material)) {
+    const next = mesh.material.map((mat) => {
+      if (!mat) return mat;
+      const cloned = mat.clone();
+      if (cloned.color && cloned.color.isColor) cloned.color.set("#ff0000");
+      cloned.needsUpdate = true;
+      return cloned;
+    });
+    mesh.material = next;
+    return;
+  }
+  const cloned = mesh.material.clone();
+  if (cloned.color && cloned.color.isColor) cloned.color.set("#ff0000");
+  cloned.needsUpdate = true;
+  mesh.material = cloned;
+}
 
 function setQueueSummary(done, total) {
   const summaryEl = document.getElementById("modelLoadQueueSummary");
@@ -556,6 +580,9 @@ function loadModel(urlOrFile, options = {}) {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          if (hasNamePrefix(child, PUDDLE_GROUP_PREFIX)) {
+            tintMeshMaterialsRed(child);
+          }
 
           if (state.envMap && child.material) {
             if (Array.isArray(child.material)) {
@@ -617,6 +644,7 @@ function loadModel(urlOrFile, options = {}) {
       renderModelNodesPanel(model);
       refreshMaterialList();
       syncShadowAndGroundFromModels();
+      syncCameraClippingPlanes();
 
       const mpX = document.getElementById("modelPosX");
       const mpY = document.getElementById("modelPosY");

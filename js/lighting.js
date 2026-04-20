@@ -9,6 +9,7 @@ export function initLightingControls() {
   const leftDirX = document.getElementById("leftDirX");
   const leftDirY = document.getElementById("leftDirY");
   const leftDirZ = document.getElementById("leftDirZ");
+  const shadowStrengthValue = document.getElementById("shadowStrengthValue");
 
   if (
     !leftHemiIntensity ||
@@ -33,14 +34,20 @@ export function initLightingControls() {
     leftHemiIntensity.value = value;
   });
 
+  function applyDirIntensityWithShadowFactor(baseIntensity) {
+    const factor = parseFloat(shadowStrengthValue?.value);
+    const shadowFactor = Number.isFinite(factor) ? Math.max(0, factor) : 1;
+    state.dirLight.intensity = baseIntensity * shadowFactor;
+  }
+
   leftDirIntensity.addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
-    state.dirLight.intensity = value;
+    applyDirIntensityWithShadowFactor(value);
     leftDirIntensityValue.value = value.toFixed(1);
   });
   leftDirIntensityValue.addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
-    state.dirLight.intensity = value;
+    applyDirIntensityWithShadowFactor(value);
     leftDirIntensity.value = value;
   });
 

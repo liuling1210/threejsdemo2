@@ -3,6 +3,7 @@ import { state } from "./core.js";
 import { refreshMaterialList } from "./material-editor.js";
 
 const UD_BACKUP = "foliageBillboardBackups";
+const UD_PREV_RECV = "foliagePrevReceiveShadow";
 export const UD_FOLIAGE_BASIC = "foliageBillboardBasic";
 
 export const DEFAULT_FOLIAGE_ALPHA_TEST = 0.4;
@@ -64,11 +65,34 @@ export function createFoliageBasicFromSource(sourceMat, alphaTest) {
   return m;
 }
 
+function meshHasFoliageBasicMaterial(materialOrList) {
+  const list = Array.isArray(materialOrList) ? materialOrList : [materialOrList];
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (m && m.userData[UD_FOLIAGE_BASIC]) return true;
+  }
+  return false;
+}
+
+function syncFoliageReceiveShadow(mesh, materialsAfterAssign) {
+  if (meshHasFoliageBasicMaterial(materialsAfterAssign)) {
+    if (mesh.userData[UD_PREV_RECV] === undefined) mesh.userData[UD_PREV_RECV] = mesh.receiveShadow;
+    mesh.receiveShadow = false;
+  } else if (mesh.userData[UD_PREV_RECV] !== undefined) {
+    mesh.receiveShadow = mesh.userData[UD_PREV_RECV];
+    delete mesh.userData[UD_PREV_RECV];
+  }
+}
+
 function processMeshMaterials(mesh, enable, alphaTest) {
   const isArr = Array.isArray(mesh.material);
   const list = isArr ? mesh.material.slice() : [mesh.material];
 
   if (!enable) {
+    if (mesh.userData[UD_PREV_RECV] !== undefined) {
+      mesh.receiveShadow = mesh.userData[UD_PREV_RECV];
+      delete mesh.userData[UD_PREV_RECV];
+    }
     const backups = mesh.userData[UD_BACKUP];
     if (!backups) return;
     for (let i = 0; i < list.length; i++) {
@@ -117,6 +141,7 @@ function processMeshMaterials(mesh, enable, alphaTest) {
   }
   mesh.material = isArr ? out : out[0];
   mesh.renderOrder = 0;
+  syncFoliageReceiveShadow(mesh, mesh.material);
 }
 
 /**

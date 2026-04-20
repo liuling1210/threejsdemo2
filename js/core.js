@@ -36,6 +36,12 @@ export const state = {
   outlinePass: null,
 };
 
+const CAMERA_NEAR = 0.1;
+const CAMERA_BASE_FAR = 1000;
+const CAMERA_FAR_PADDING = 200;
+const CAMERA_FAR_MULTIPLIER = 6;
+const CAMERA_MAX_FAR = 200000;
+
 // Transparent material envMap intensity compensation:
 // Three.js multiplies final reflected color by opacity, so reflections appear darker for transparent materials.
 export function getEnvMapIntensityForMaterial(mat, baseIntensity) {
@@ -61,7 +67,7 @@ export function initCore() {
   state.scene = new THREE.Scene();
   state.scene.background = new THREE.Color(0xcccccc);
 
-  state.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  state.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, CAMERA_NEAR, CAMERA_BASE_FAR);
   state.camera.position.set(153.2408832039139, 158.5726587585243, 217.34024277321305);
   window.camera = state.camera;
 
@@ -69,6 +75,7 @@ export function initCore() {
   state.controls.enableDamping = true;
   state.controls.enableZoom = true;
   state.controls.target.set(0, 0, 0);
+  state.controls.addEventListener("change", syncCameraClippingPlanes);
 
   // Lights
   state.hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
@@ -143,11 +150,23 @@ export function initCore() {
     state.renderer.setSize(window.innerWidth, window.innerHeight);
   };
   window.addEventListener("resize", resize);
+  syncCameraClippingPlanes();
 }
 
 const _unionBox = new THREE.Box3();
 const _modelsBox = new THREE.Box3();
-const _sunOffsetDir = new THREE.Vector3(5, 10, 7.5).normalize();
+const _sunDirection = new THREE.Vector3(5, 10, 7.5);
+const _sunOffsetDir = _sunDirection.clone().normalize();
+
+function refreshSunDirectionFromInputs() {
+  const x = parseFloat(document.getElementById("shadowDirX")?.value);
+  const y = parseFloat(document.getElementById("shadowDirY")?.value);
+  const z = parseFloat(document.getElementById("shadowDirZ")?.value);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+  _sunDirection.set(x, y, z);
+  if (_sunDirection.lengthSq() < 1e-6) return;
+  _sunOffsetDir.copy(_sunDirection).normalize();
+}
 
 export function getLoadedModelsBoundingBox(targetBox = new THREE.Box3()) {
   targetBox.makeEmpty();
@@ -156,6 +175,37 @@ export function getLoadedModelsBoundingBox(targetBox = new THREE.Box3()) {
     targetBox.union(_unionBox);
   }
   return targetBox;
+}
+
+export function syncCameraClippingPlanes() {
+  if (!state.camera) return;
+
+  let requiredDistance = 0;
+
+  if (state.controls) {
+    requiredDistance = Math.max(requiredDistance, state.camera.position.distanceTo(state.controls.target));
+  }
+
+  if (state.loadedModels.length) {
+    getLoadedModelsBoundingBox(_modelsBox);
+    if (!_modelsBox.isEmpty()) {
+      const sphere = _modelsBox.getBoundingSphere(new THREE.Sphere());
+      const modelDistance = state.camera.position.distanceTo(sphere.center) + sphere.radius;
+      requiredDistance = Math.max(requiredDistance, modelDistance);
+    }
+  }
+
+  const nextFar = THREE.MathUtils.clamp(
+    Math.max(CAMERA_BASE_FAR, requiredDistance * CAMERA_FAR_MULTIPLIER + CAMERA_FAR_PADDING),
+    CAMERA_BASE_FAR,
+    CAMERA_MAX_FAR
+  );
+
+  if (Math.abs(state.camera.far - nextFar) > 1) {
+    state.camera.near = CAMERA_NEAR;
+    state.camera.far = nextFar;
+    state.camera.updateProjectionMatrix();
+  }
 }
 
 /**
@@ -174,7 +224,7 @@ export function syncShadowAndGroundFromModels() {
     ground.position.set(0, 0, 0);
     grid.position.set(0, 0.02, 0);
     light.target.position.set(0, 0, 0);
-    light.position.set(5, 10, 7.5);
+    light.position.copy(_sunOffsetDir.clone().multiplyScalar(50));
     light.shadow.camera.left = -50;
     light.shadow.camera.right = 50;
     light.shadow.camera.top = 50;
@@ -233,6 +283,11 @@ export function initSceneControls() {
   const shadowEnabled = document.getElementById("shadowEnabled");
   const shadowRadius = document.getElementById("shadowRadius");
   const shadowRadiusValue = document.getElementById("shadowRadiusValue");
+  const shadowStrength = document.getElementById("shadowStrength");
+  const shadowStrengthValue = document.getElementById("shadowStrengthValue");
+  const shadowDirX = document.getElementById("shadowDirX");
+  const shadowDirY = document.getElementById("shadowDirY");
+  const shadowDirZ = document.getElementById("shadowDirZ");
   const groundGridEnabled = document.getElementById("groundGridEnabled");
   const modelAxesEnabled = document.getElementById("modelAxesEnabled");
 
@@ -302,6 +357,34 @@ export function initSceneControls() {
     });
   }
 
+  function applyShadowStrength(v) {
+    const factor = Math.max(0, Number(v) || 0);
+    const baseDir = parseFloat(document.getElementById("leftDirIntensityValue")?.value) || 1.5;
+    state.dirLight.intensity = baseDir * factor;
+  }
+  if (shadowStrength) {
+    shadowStrength.addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value) || 0;
+      if (shadowStrengthValue) shadowStrengthValue.value = v.toFixed(2);
+      applyShadowStrength(v);
+    });
+  }
+  if (shadowStrengthValue) {
+    shadowStrengthValue.addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value) || 0;
+      if (shadowStrength) shadowStrength.value = String(v);
+      applyShadowStrength(v);
+    });
+  }
+
+  const applyShadowDirection = () => {
+    refreshSunDirectionFromInputs();
+    syncShadowAndGroundFromModels();
+  };
+  [shadowDirX, shadowDirY, shadowDirZ].forEach((input) => {
+    input?.addEventListener("input", applyShadowDirection);
+  });
+
   if (groundGridEnabled) {
     groundGridEnabled.addEventListener("change", (e) => {
       const useGrid = e.target.checked;
@@ -310,6 +393,7 @@ export function initSceneControls() {
   }
 
   applyGroundSize();
+  applyShadowDirection();
 
   if (modelAxesEnabled) {
     modelAxesEnabled.addEventListener("change", (e) => {

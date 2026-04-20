@@ -92,6 +92,12 @@ export function collectSettingsSnapshot() {
       },
       shadowEnabled: !!el("shadowEnabled")?.checked,
       shadowRadius: parseFloat(el("shadowRadiusValue")?.value) || 0,
+      shadowStrength: parseFloat(el("shadowStrengthValue")?.value) || 1,
+      shadowDirection: [
+        parseFloat(el("shadowDirX")?.value) || 5,
+        parseFloat(el("shadowDirY")?.value) || 10,
+        parseFloat(el("shadowDirZ")?.value) || 7.5
+      ],
       groundGridEnabled: !!el("groundGridEnabled")?.checked,
       modelAxesEnabled: !!el("modelAxesEnabled")?.checked
     },
@@ -201,6 +207,12 @@ export function applySettingsSnapshot(data) {
   }
   if (S.shadowEnabled != null) setCheckbox("shadowEnabled", S.shadowEnabled);
   if (S.shadowRadius != null) setRangeNumberPair("shadowRadius", "shadowRadiusValue", S.shadowRadius);
+  if (S.shadowStrength != null) setRangeNumberPair("shadowStrength", "shadowStrengthValue", S.shadowStrength);
+  if (Array.isArray(S.shadowDirection) && S.shadowDirection.length >= 3) {
+    setNumberInput("shadowDirX", S.shadowDirection[0]);
+    setNumberInput("shadowDirY", S.shadowDirection[1]);
+    setNumberInput("shadowDirZ", S.shadowDirection[2]);
+  }
   if (S.groundGridEnabled != null) setCheckbox("groundGridEnabled", S.groundGridEnabled);
   if (S.modelAxesEnabled != null) setCheckbox("modelAxesEnabled", S.modelAxesEnabled);
 
