@@ -230,15 +230,16 @@ const MESH_VIS_SVG = {
   )
 };
 
-function createMeshVisibilityButton(mesh) {
+function createNodeVisibilityButton(node) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "node-tree-vis-btn";
+  const isGroupNode = node.isGroup === true;
 
   function sync() {
-    const on = mesh.visible;
+    const on = node.visible;
     btn.innerHTML = on ? MESH_VIS_SVG.on : MESH_VIS_SVG.off;
-    btn.setAttribute("aria-label", on ? "隐藏网格" : "显示网格");
+    btn.setAttribute("aria-label", on ? (isGroupNode ? "隐藏组" : "隐藏网格") : (isGroupNode ? "显示组" : "显示网格"));
     btn.title = on ? "隐藏" : "显示";
     btn.classList.toggle("node-tree-vis-btn--off", !on);
   }
@@ -247,7 +248,7 @@ function createMeshVisibilityButton(mesh) {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     e.preventDefault();
-    mesh.visible = !mesh.visible;
+    node.visible = !node.visible;
     sync();
   });
   btn.addEventListener("dblclick", (e) => e.stopPropagation());
@@ -330,8 +331,8 @@ function renderModelNodesPanel(model) {
 
     row.appendChild(toggle);
     row.appendChild(label);
-    if (node.isMesh) {
-      row.appendChild(createMeshVisibilityButton(node));
+    if (node.isMesh || node.isGroup) {
+      row.appendChild(createNodeVisibilityButton(node));
     }
     li.appendChild(row);
 

@@ -31,6 +31,8 @@ export const state = {
   highlightedMeshes: [],
   highlightedLines: [],
   flowEffects: [],
+  panelCubes: [],
+  selectedPanelCubeId: null,
 
   composer: null,
   outlinePass: null,
@@ -290,6 +292,15 @@ export function initSceneControls() {
   const shadowDirZ = document.getElementById("shadowDirZ");
   const groundGridEnabled = document.getElementById("groundGridEnabled");
   const modelAxesEnabled = document.getElementById("modelAxesEnabled");
+  const addCubeButton = document.getElementById("addPanelCubeBtn");
+  const cubeSizeW = document.getElementById("panelCubeSizeW");
+  const cubeSizeH = document.getElementById("panelCubeSizeH");
+  const cubeSizeD = document.getElementById("panelCubeSizeD");
+  const cubePosX = document.getElementById("panelCubePosX");
+  const cubePosY = document.getElementById("panelCubePosY");
+  const cubePosZ = document.getElementById("panelCubePosZ");
+  const cubeSelect = document.getElementById("panelCubeSelect");
+  const removeCubeButton = document.getElementById("removePanelCubeBtn");
 
   function applyModelPosition() {
     if (!state.modelRef) return;
@@ -391,6 +402,101 @@ export function initSceneControls() {
       state.groundGridHelper.visible = useGrid;
     });
   }
+
+  function getSelectedPanelCube() {
+    return state.panelCubes.find((item) => item.id === state.selectedPanelCubeId) || null;
+  }
+
+  function refreshPanelCubeOptions() {
+    if (!cubeSelect) return;
+    cubeSelect.innerHTML = "";
+    state.panelCubes.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      cubeSelect.appendChild(option);
+    });
+    cubeSelect.disabled = state.panelCubes.length === 0;
+    if (state.selectedPanelCubeId && state.panelCubes.some((item) => item.id === state.selectedPanelCubeId)) {
+      cubeSelect.value = state.selectedPanelCubeId;
+    }
+    if (removeCubeButton) removeCubeButton.disabled = state.panelCubes.length === 0;
+  }
+
+  function fillInputsFromSelectedCube() {
+    const selected = getSelectedPanelCube();
+    if (!selected) return;
+    if (cubeSizeW) cubeSizeW.value = selected.mesh.scale.x.toFixed(2);
+    if (cubeSizeH) cubeSizeH.value = selected.mesh.scale.y.toFixed(2);
+    if (cubeSizeD) cubeSizeD.value = selected.mesh.scale.z.toFixed(2);
+    if (cubePosX) cubePosX.value = selected.mesh.position.x.toFixed(2);
+    if (cubePosY) cubePosY.value = selected.mesh.position.y.toFixed(2);
+    if (cubePosZ) cubePosZ.value = selected.mesh.position.z.toFixed(2);
+  }
+
+  function applyPanelCubeTransform() {
+    const selected = getSelectedPanelCube();
+    if (!selected) return;
+    const sx = Math.max(0.01, parseFloat(cubeSizeW?.value) || 20);
+    const sy = Math.max(0.01, parseFloat(cubeSizeH?.value) || 20);
+    const sz = Math.max(0.01, parseFloat(cubeSizeD?.value) || 20);
+    const px = parseFloat(cubePosX?.value) || 10;
+    const py = parseFloat(cubePosY?.value) || 10;
+    const pz = parseFloat(cubePosZ?.value) || 10;
+    selected.mesh.scale.set(sx, sy, sz);
+    selected.mesh.position.set(px, py, pz);
+  }
+
+  if (addCubeButton) {
+    addCubeButton.addEventListener("click", () => {
+      const defaultSize = 20;
+      const defaultPos = 10;
+      const index = state.panelCubes.length + 1;
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xaedcff,
+        transparent: true,
+        opacity: 0.5,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.set(defaultSize, defaultSize, defaultSize);
+      mesh.position.set(defaultPos, defaultPos, defaultPos);
+      const id = `panelCube-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      mesh.name = id;
+      const cubeItem = { id, label: `立方体 ${index}`, mesh };
+      state.panelCubes.push(cubeItem);
+      state.selectedPanelCubeId = id;
+      state.scene.add(mesh);
+      refreshPanelCubeOptions();
+      fillInputsFromSelectedCube();
+    });
+  }
+
+  if (cubeSelect) {
+    cubeSelect.addEventListener("change", () => {
+      state.selectedPanelCubeId = cubeSelect.value || null;
+      fillInputsFromSelectedCube();
+    });
+  }
+
+  if (removeCubeButton) {
+    removeCubeButton.addEventListener("click", () => {
+      const selected = getSelectedPanelCube();
+      if (!selected) return;
+      state.scene.remove(selected.mesh);
+      selected.mesh.geometry.dispose();
+      selected.mesh.material.dispose();
+      state.panelCubes = state.panelCubes.filter((item) => item.id !== selected.id);
+      state.selectedPanelCubeId = state.panelCubes.length ? state.panelCubes[state.panelCubes.length - 1].id : null;
+      refreshPanelCubeOptions();
+      fillInputsFromSelectedCube();
+    });
+  }
+
+  [cubeSizeW, cubeSizeH, cubeSizeD, cubePosX, cubePosY, cubePosZ].forEach((input) => {
+    input?.addEventListener("input", applyPanelCubeTransform);
+  });
+  refreshPanelCubeOptions();
 
   applyGroundSize();
   applyShadowDirection();
