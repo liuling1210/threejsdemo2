@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { state } from "./core.js";
 import { setOutlineSelectedObjects } from "./post-outline.js";
-import { restoreHighlightedMeshes } from "./model-loader.js";
+import {
+  restoreHighlightedMeshes,
+  focusModelNodesPanelOnObject,
+  clearModelNodesPanelPickedRow
+} from "./model-loader.js";
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
@@ -39,8 +43,13 @@ function pickFromPointerEvent(event) {
   const first = hits.find((h) => h.object && h.object.isMesh && meshAncestorsVisible(h.object));
 
   restoreHighlightedMeshes();
-  if (first) setOutlineSelectedObjects([first.object]);
-  else setOutlineSelectedObjects([]);
+  if (first) {
+    setOutlineSelectedObjects([first.object]);
+    focusModelNodesPanelOnObject(first.object);
+  } else {
+    setOutlineSelectedObjects([]);
+    clearModelNodesPanelPickedRow();
+  }
 }
 
 export function initViewportMeshPick() {

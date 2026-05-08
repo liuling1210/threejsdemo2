@@ -677,6 +677,13 @@ html,
         min-height: 22px;
       }
 
+      .node-tree-row--picked {
+        background: rgba(33, 150, 243, 0.2);
+        outline: 1px solid #2196f3;
+        outline-offset: -1px;
+        border-radius: 4px;
+      }
+
       .node-tree-toggle {
         width: 18px;
         min-width: 18px;

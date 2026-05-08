@@ -210,6 +210,55 @@ export function syncCameraClippingPlanes() {
   }
 }
 
+let activeCameraFlight = null;
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/** Smooth orbit camera to frame `node` (same behavior as model node double-click). */
+export function flyCameraToObject(node) {
+  if (!node || !state.camera || !state.controls) return;
+
+  const box = new THREE.Box3().setFromObject(node);
+  if (box.isEmpty()) return;
+
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1e-3);
+  const fov = (state.camera.fov * Math.PI) / 180;
+  const fitDistance = (maxDim / (2 * Math.tan(fov / 2))) * 1.6;
+
+  const viewDir = state.camera.position.clone().sub(state.controls.target);
+  if (viewDir.lengthSq() < 1e-8) viewDir.set(1, 0.6, 1);
+  viewDir.normalize();
+
+  const toPos = center.clone().add(viewDir.multiplyScalar(fitDistance));
+
+  activeCameraFlight = {
+    startTime: performance.now(),
+    duration: 650,
+    fromPos: state.camera.position.clone(),
+    toPos,
+    fromTarget: state.controls.target.clone(),
+    toTarget: center
+  };
+}
+
+export function updateCameraFlight() {
+  if (!activeCameraFlight) return;
+
+  const now = performance.now();
+  const t = Math.min(1, (now - activeCameraFlight.startTime) / activeCameraFlight.duration);
+  const k = easeInOutCubic(t);
+
+  state.camera.position.lerpVectors(activeCameraFlight.fromPos, activeCameraFlight.toPos, k);
+  state.controls.target.lerpVectors(activeCameraFlight.fromTarget, activeCameraFlight.toTarget, k);
+  state.controls.update();
+
+  if (t >= 1) activeCameraFlight = null;
+}
+
 /**
  * Places the ground under loaded models, moves the directional light / target with the scene,
  * and fits the orthographic shadow frustum to the models (large scenes supported).
@@ -301,6 +350,7 @@ export function initSceneControls() {
   const cubePosZ = document.getElementById("panelCubePosZ");
   const cubeSelect = document.getElementById("panelCubeSelect");
   const removeCubeButton = document.getElementById("removePanelCubeBtn");
+  const cubeQuickCreateInput = document.getElementById("panelCubeQuickCreateInput");
 
   function applyModelPosition() {
     if (!state.modelRef) return;
@@ -447,28 +497,90 @@ export function initSceneControls() {
     selected.mesh.position.set(px, py, pz);
   }
 
+  function createPanelCubeByValues(
+    {
+      length = 20,
+      width = 20,
+      height = 20,
+      x = 10,
+      y = 10,
+      z = 10,
+    } = {},
+    { flyTo = false } = {}
+  ) {
+    const index = state.panelCubes.length + 1;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xaedcff,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.scale.set(
+      Math.max(0.01, Number(length) || 20),
+      Math.max(0.01, Number(width) || 20),
+      Math.max(0.01, Number(height) || 20)
+    );
+    mesh.position.set(Number(x) || 10, Number(y) || 10, Number(z) || 10);
+    const id = `panelCube-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    mesh.name = id;
+    const cubeItem = { id, label: `立方体 ${index}`, mesh };
+    state.panelCubes.push(cubeItem);
+    state.selectedPanelCubeId = id;
+    state.scene.add(mesh);
+    mesh.updateMatrixWorld(true);
+    refreshPanelCubeOptions();
+    fillInputsFromSelectedCube();
+    if (flyTo) {
+      flyCameraToObject(mesh);
+      syncCameraClippingPlanes();
+    }
+  }
+
+  function parseCubeQuickCreateText(text) {
+    if (!text || typeof text !== "string") return null;
+    const kv = {};
+    const segments = text.split(",");
+    for (let i = 0; i < segments.length; i++) {
+      const [rawKey, rawVal] = segments[i].split(":");
+      const key = (rawKey || "").trim().toUpperCase();
+      const val = parseFloat((rawVal || "").trim());
+      if (!key || !Number.isFinite(val)) return null;
+      kv[key] = val;
+    }
+    const requiredKeys = ["L", "W", "H", "X", "Y", "Z"];
+    const hasAll = requiredKeys.every((k) => Object.prototype.hasOwnProperty.call(kv, k));
+    if (!hasAll) return null;
+    return {
+      length: kv.L,
+      width: kv.W,
+      height: kv.H,
+      x: kv.X,
+      y: kv.Y,
+      z: kv.Z,
+    };
+  }
+
   if (addCubeButton) {
     addCubeButton.addEventListener("click", () => {
-      const defaultSize = 20;
-      const defaultPos = 10;
-      const index = state.panelCubes.length + 1;
-      const geo = new THREE.BoxGeometry(1, 1, 1);
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xaedcff,
-        transparent: true,
-        opacity: 0.5,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.scale.set(defaultSize, defaultSize, defaultSize);
-      mesh.position.set(defaultPos, defaultPos, defaultPos);
-      const id = `panelCube-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      mesh.name = id;
-      const cubeItem = { id, label: `立方体 ${index}`, mesh };
-      state.panelCubes.push(cubeItem);
-      state.selectedPanelCubeId = id;
-      state.scene.add(mesh);
-      refreshPanelCubeOptions();
-      fillInputsFromSelectedCube();
+      createPanelCubeByValues();
+    });
+  }
+
+  function tryQuickCreateFromInput() {
+    const parsed = parseCubeQuickCreateText(cubeQuickCreateInput.value);
+    if (!parsed) return;
+    createPanelCubeByValues(parsed, { flyTo: true });
+    cubeQuickCreateInput.value = "";
+  }
+
+  if (cubeQuickCreateInput) {
+    cubeQuickCreateInput.addEventListener("change", tryQuickCreateFromInput);
+    cubeQuickCreateInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        tryQuickCreateFromInput();
+      }
     });
   }
 

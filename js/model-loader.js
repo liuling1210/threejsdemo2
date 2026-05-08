@@ -1,6 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { state, getEnvMapIntensityForMaterial, syncShadowAndGroundFromModels, syncCameraClippingPlanes } from "./core.js";
+import {
+  state,
+  getEnvMapIntensityForMaterial,
+  syncShadowAndGroundFromModels,
+  syncCameraClippingPlanes,
+  flyCameraToObject,
+  updateCameraFlight
+} from "./core.js";
 import { setOutlineSelectedObjects } from "./post-outline.js";
 import { generateEnvironmentMapFromScene, syncPbrFromPanel } from "./pbr.js";
 import { refreshMaterialList } from "./material-editor.js";
@@ -11,7 +18,6 @@ import {
 } from "./foliage-billboard.js";
 
 const DEFAULT_MODEL_URL = new URL("../models/test02/dongshun001.gltf", import.meta.url).href;
-let activeCameraFlight = null;
 const PUDDLE_GROUP_PREFIX = "WPW_puddle";
 
 function hasNamePrefix(obj, prefix) {
@@ -161,8 +167,54 @@ function setQueueCollapsed(collapsed) {
 
 const nodeTreeCollapsedState = new Map();
 
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+/** DOM row for the last viewport-picked node (cleared when tree rebuilds). */
+let lastPickedNodeRow = null;
+
+export function clearModelNodesPanelPickedRow() {
+  if (lastPickedNodeRow && lastPickedNodeRow.isConnected) {
+    lastPickedNodeRow.classList.remove("node-tree-row--picked");
+  }
+  lastPickedNodeRow = null;
+}
+
+function expandAncestorsTowardRow(rowEl, listEl) {
+  let li = rowEl.parentElement;
+  if (!li || !li.classList.contains("node-tree-item")) return;
+  while (li && li !== listEl) {
+    const ul = li.parentElement;
+    if (!ul) break;
+    if (ul.classList.contains("node-tree-children")) {
+      if (ul.style.display === "none") {
+        ul.style.display = "";
+        const holderLi = ul.parentElement;
+        if (holderLi?.dataset.pathKey != null) {
+          nodeTreeCollapsedState.set(holderLi.dataset.pathKey, false);
+        }
+        const toggle = holderLi?.querySelector(":scope > .node-tree-row > .node-tree-toggle");
+        if (toggle && !toggle.disabled) {
+          toggle.textContent = "▼";
+          toggle.setAttribute("aria-label", "折叠节点");
+        }
+      }
+      li = ul.parentElement;
+    } else {
+      break;
+    }
+  }
+}
+
+/** Scroll the model nodes list to `obj` and highlight its row (expects `obj` in the current tree). */
+export function focusModelNodesPanelOnObject(obj) {
+  if (!obj || !obj.uuid) return;
+  const listEl = document.getElementById("modelNodesList");
+  if (!listEl) return;
+  const row = listEl.querySelector(`.node-tree-row[data-node-uuid="${obj.uuid}"]`);
+  if (!row) return;
+  clearModelNodesPanelPickedRow();
+  expandAncestorsTowardRow(row, listEl);
+  row.classList.add("node-tree-row--picked");
+  lastPickedNodeRow = row;
+  row.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 function findHighlightTarget(node) {
@@ -173,48 +225,6 @@ function findHighlightTarget(node) {
     if (!target && (child.isMesh || child.isLine || child.isLineSegments)) target = child;
   });
   return target;
-}
-
-function flyCameraToObject(node) {
-  if (!node || !state.camera || !state.controls) return;
-
-  const box = new THREE.Box3().setFromObject(node);
-  if (box.isEmpty()) return;
-
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 1e-3);
-  const fov = (state.camera.fov * Math.PI) / 180;
-  const fitDistance = (maxDim / (2 * Math.tan(fov / 2))) * 1.6;
-
-  const viewDir = state.camera.position.clone().sub(state.controls.target);
-  if (viewDir.lengthSq() < 1e-8) viewDir.set(1, 0.6, 1);
-  viewDir.normalize();
-
-  const toPos = center.clone().add(viewDir.multiplyScalar(fitDistance));
-
-  activeCameraFlight = {
-    startTime: performance.now(),
-    duration: 650,
-    fromPos: state.camera.position.clone(),
-    toPos,
-    fromTarget: state.controls.target.clone(),
-    toTarget: center
-  };
-}
-
-function updateCameraFlight() {
-  if (!activeCameraFlight) return;
-
-  const now = performance.now();
-  const t = Math.min(1, (now - activeCameraFlight.startTime) / activeCameraFlight.duration);
-  const k = easeInOutCubic(t);
-
-  state.camera.position.lerpVectors(activeCameraFlight.fromPos, activeCameraFlight.toPos, k);
-  state.controls.target.lerpVectors(activeCameraFlight.fromTarget, activeCameraFlight.toTarget, k);
-  state.controls.update();
-
-  if (t >= 1) activeCameraFlight = null;
 }
 
 function svgWrap(inner) {
@@ -265,8 +275,11 @@ function renderModelNodesPanel(model) {
     summaryEl.textContent = "节点数: —";
     listEl.textContent = "请先加载模型";
     nodeTreeCollapsedState.clear();
+    clearModelNodesPanelPickedRow();
     return;
   }
+
+  clearModelNodesPanelPickedRow();
 
   let count = 0;
   const treeRoot = document.createElement("ul");
@@ -276,9 +289,11 @@ function renderModelNodesPanel(model) {
     count++;
     const li = document.createElement("li");
     li.className = "node-tree-item";
+    li.dataset.pathKey = pathKey;
 
     const row = document.createElement("div");
     row.className = "node-tree-row";
+    row.dataset.nodeUuid = node.uuid;
 
     const children = node.children || [];
     const hasChildren = children.length > 0;
