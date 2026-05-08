@@ -23,6 +23,8 @@ export const state = {
   cubeCamera: null,
   useImageEnvMap: false,
   pmremGenerator: null,
+  /** Equirectangular texture shown as scene.background (dispose when replacing / clearing). */
+  skyboxEquirectTexture: null,
 
   // Model / interactions
   modelRef: null,
@@ -367,7 +369,15 @@ export function initSceneControls() {
 
   if (sceneBgColor) {
     sceneBgColor.addEventListener("input", (e) => {
-      state.scene.background.setStyle(e.target.value);
+      const v = e.target.value;
+      if (state.skyboxEquirectTexture) {
+        state.skyboxEquirectTexture.dispose();
+        state.skyboxEquirectTexture = null;
+      }
+      if (!state.scene.background || !state.scene.background.isColor) {
+        state.scene.background = new THREE.Color();
+      }
+      state.scene.background.setStyle(v);
     });
   }
 

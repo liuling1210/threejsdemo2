@@ -186,8 +186,23 @@ function applyTransparencyParams(opacity, alphaTest) {
   });
 }
 
+function restoreSceneSolidBackgroundFromUI() {
+  const el = document.getElementById("sceneBgColor");
+  const hex = (el && el.value) || "#cccccc";
+  state.scene.background = new THREE.Color().setStyle(hex);
+}
+
+function disposeSkyboxEquirectTracked() {
+  if (!state.skyboxEquirectTexture) return;
+  restoreSceneSolidBackgroundFromUI();
+  state.skyboxEquirectTexture.dispose();
+  state.skyboxEquirectTexture = null;
+}
+
 function clearImageEnvironmentMap() {
   state.useImageEnvMap = false;
+
+  disposeSkyboxEquirectTracked();
 
   if (state.envMap) {
     state.envMap.dispose();
@@ -220,6 +235,8 @@ function loadImageEnvironmentMap() {
   loader.load(
     DEFAULT_ENV_MAP_URL,
     (texture) => {
+      disposeSkyboxEquirectTracked();
+
       texture.mapping = THREE.EquirectangularReflectionMapping;
       texture.colorSpace = THREE.SRGBColorSpace;
       const cubeEnvMap = state.pmremGenerator.fromEquirectangular(texture).texture;
@@ -285,6 +302,9 @@ function loadEnvironmentMapFromFile(file) {
     (texture) => {
       URL.revokeObjectURL(url);
 
+      disposeSkyboxEquirectTracked();
+      restoreSceneSolidBackgroundFromUI();
+
       texture.mapping = THREE.EquirectangularReflectionMapping;
       texture.colorSpace = THREE.SRGBColorSpace;
       const cubeEnvMap = state.pmremGenerator.fromEquirectangular(texture).texture;
@@ -339,6 +359,96 @@ function loadEnvironmentMapFromFile(file) {
     (err) => {
       URL.revokeObjectURL(url);
       console.warn("加载本地环境贴图失败:", err);
+    }
+  );
+}
+
+/** 单张环形全景（equirectangular）→ 天空背景 + PMREM 环境反射 */
+function loadSkyboxPanoramaFromFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+
+  const url = URL.createObjectURL(file);
+  const loader = new THREE.TextureLoader();
+  loader.load(
+    url,
+    (texture) => {
+      URL.revokeObjectURL(url);
+
+      disposeSkyboxEquirectTracked();
+
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const bgMapping =
+        THREE.EquirectangularBackgroundMapping !== undefined
+          ? THREE.EquirectangularBackgroundMapping
+          : THREE.EquirectangularReflectionMapping;
+      texture.mapping = bgMapping;
+
+      state.skyboxEquirectTexture = texture;
+      state.scene.background = texture;
+
+      const prevMapping = texture.mapping;
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      const cubeEnvMap = state.pmremGenerator.fromEquirectangular(texture).texture;
+      texture.mapping = prevMapping;
+      texture.needsUpdate = true;
+
+      if (state.envMap) {
+        state.envMap.dispose();
+        state.envMap = null;
+      }
+      if (state.cubeCamera) {
+        state.cubeCamera.renderTarget.dispose();
+        state.scene.remove(state.cubeCamera);
+        state.cubeCamera = null;
+      }
+
+      state.envMap = cubeEnvMap;
+      state.scene.environment = state.envMap;
+      state.useImageEnvMap = true;
+
+      const envIntensityEl = document.getElementById("pbrEnvMapIntensityValue");
+      const envIntensity = envIntensityEl ? parseFloat(envIntensityEl.value) || 1 : 1;
+
+      if (state.modelRef) {
+        state.modelRef.traverse((child) => {
+          if (child.isMesh && child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((mat) => {
+                if (mat.userData.foliageBillboardBasic) return;
+                if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                  mat.envMap = state.envMap;
+                  mat.envMapIntensity = getEnvMapIntensityForMaterial(mat, envIntensity);
+                  mat.needsUpdate = true;
+                }
+              });
+            } else {
+              if (
+                !child.material.userData.foliageBillboardBasic &&
+                (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial)
+              ) {
+                child.material.envMap = state.envMap;
+                child.material.envMapIntensity = getEnvMapIntensityForMaterial(child.material, envIntensity);
+                child.material.needsUpdate = true;
+              }
+            }
+          }
+        });
+      }
+
+      const imageEnvMapCheckbox = document.getElementById("imageEnvMapEnabled");
+      const imageEnvMapParamsEl = document.getElementById("imageEnvMapParams");
+      if (imageEnvMapCheckbox && !imageEnvMapCheckbox.checked) {
+        imageEnvMapCheckbox.checked = true;
+      }
+      if (imageEnvMapParamsEl) imageEnvMapParamsEl.style.display = "";
+
+      syncPbrFromPanel();
+      console.log("天空盒（环形全景）已加载:", file.name);
+    },
+    undefined,
+    (err) => {
+      URL.revokeObjectURL(url);
+      console.warn("加载天空盒全景图失败:", err);
     }
   );
 }
@@ -489,6 +599,17 @@ export function initPbrControls() {
     }
   } else {
     loadImageEnvironmentMap();
+  }
+
+  const uploadSkyboxBtn = document.getElementById("uploadSkyboxPanoramaButton");
+  const skyboxPanoramaFileInput = document.getElementById("skyboxPanoramaFileInput");
+  if (uploadSkyboxBtn && skyboxPanoramaFileInput) {
+    uploadSkyboxBtn.addEventListener("click", () => skyboxPanoramaFileInput.click());
+    skyboxPanoramaFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) loadSkyboxPanoramaFromFile(file);
+      e.target.value = "";
+    });
   }
 }
 
