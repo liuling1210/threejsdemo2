@@ -167,6 +167,21 @@ function setQueueCollapsed(collapsed) {
 
 const nodeTreeCollapsedState = new Map();
 
+function inferModelLoadLabel(urlOrFile, options = {}) {
+  if (options.modelLoadLabel) return String(options.modelLoadLabel);
+  if (urlOrFile instanceof File) return urlOrFile.name;
+  if (typeof urlOrFile === "string") {
+    try {
+      const noQuery = urlOrFile.split("?")[0];
+      const parts = noQuery.split("/").filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : "(模型)";
+    } catch {
+      return "(模型)";
+    }
+  }
+  return "(模型)";
+}
+
 /** DOM row for the last viewport-picked node (cleared when tree rebuilds). */
 let lastPickedNodeRow = null;
 
@@ -266,12 +281,13 @@ function createNodeVisibilityButton(node) {
   return btn;
 }
 
-function renderModelNodesPanel(model) {
+function renderModelNodesPanel() {
   const summaryEl = document.getElementById("modelNodesSummary");
   const listEl = document.getElementById("modelNodesList");
   if (!summaryEl || !listEl) return;
 
-  if (!model) {
+  const roots = (state.loadedModels || []).filter(Boolean);
+  if (!roots.length) {
     summaryEl.textContent = "节点数: —";
     listEl.textContent = "请先加载模型";
     nodeTreeCollapsedState.clear();
@@ -303,8 +319,14 @@ function renderModelNodesPanel(model) {
 
     const label = document.createElement("span");
     label.className = "node-tree-label";
+    const isSceneRootRow = typeof pathKey === "string" && /^m\d+\/root$/.test(pathKey);
+    const src = node.userData && node.userData.loadSourceName;
     const name = node.name && node.name.trim() ? node.name : "(未命名)";
-    label.textContent = `[${node.type}] ${name}`;
+    const labelBody =
+      isSceneRootRow && src
+        ? src + (name !== "(未命名)" ? ` · ${name}` : "")
+        : name;
+    label.textContent = `[${node.type}] ${labelBody}`;
     label.title = "双击：高亮并飞到该节点";
 
     const focusNode = () => {
@@ -362,9 +384,12 @@ function renderModelNodesPanel(model) {
     return li;
   };
 
-  treeRoot.appendChild(createNodeItem(model, "root"));
+  for (let mi = 0; mi < roots.length; mi++) {
+    treeRoot.appendChild(createNodeItem(roots[mi], `m${mi}/root`));
+  }
 
-  summaryEl.textContent = `节点数: ${count}`;
+  summaryEl.textContent =
+    roots.length > 1 ? `节点数: ${count}（${roots.length} 个模型）` : `节点数: ${count}`;
   listEl.innerHTML = "";
   listEl.appendChild(treeRoot);
 }
@@ -573,7 +598,7 @@ function removeOldModel() {
   state.loadedModels.length = 0;
   state.modelRef = null;
   state.modelAxesHelper = null;
-  renderModelNodesPanel(null);
+  renderModelNodesPanel();
   refreshMaterialList();
   syncShadowAndGroundFromModels();
 }
@@ -589,6 +614,7 @@ function loadModel(urlOrFile, options = {}) {
 
     const onLoad = (gltf) => {
       const model = gltf.scene;
+      model.userData.loadSourceName = inferModelLoadLabel(urlOrFile, options);
       state.modelRef = model;
       state.loadedModels.push(model);
 
@@ -657,7 +683,7 @@ function loadModel(urlOrFile, options = {}) {
       }
 
       state.scene.add(model);
-      renderModelNodesPanel(model);
+      renderModelNodesPanel();
       refreshMaterialList();
       syncShadowAndGroundFromModels();
       syncCameraClippingPlanes();
@@ -803,7 +829,7 @@ export function initModelLoader() {
 
   // Initial load.
   state.lastModelFileSize = null;
-  renderModelNodesPanel(null);
+  renderModelNodesPanel();
   refreshMaterialList();
   loadModel(DEFAULT_MODEL_URL).catch((error) => {
     console.error("默认模型加载失败:", error);
